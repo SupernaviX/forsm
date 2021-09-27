@@ -1,13 +1,10 @@
+mod generator;
 use anyhow::{anyhow, Result};
-use parity_wasm::{
-    builder,
-    elements::{Instruction, Instructions},
-    serialize,
-};
+use generator::Generator;
 use wasmer::{imports, Instance, Module, Store, Value};
 
-pub fn execute() -> Result<i32> {
-    let binary = generate_code()?;
+pub fn execute(output: i32) -> Result<i32> {
+    let binary = generate_code(output)?;
     let instance = instantiate(&binary)?;
     let test = instance.exports.get_function("test")?;
     let result = test.call(&[])?;
@@ -17,25 +14,8 @@ pub fn execute() -> Result<i32> {
     }
 }
 
-fn generate_code() -> Result<Vec<u8>> {
-    #[rustfmt::skip]
-    let module = builder::module()
-        .function()
-            .signature()
-                .result().i32()
-                .build()
-            .body()
-                .with_instructions(Instructions::new(
-                    vec![Instruction::I32Const(42), Instruction::End]
-                ))
-                .build()
-            .build()
-        .export()
-            .field("test")
-            .internal().func(0)
-            .build()
-    .build();
-    Ok(serialize(module)?)
+fn generate_code(output: i32) -> Result<Vec<u8>> {
+    Generator::default().add_test_func(output).compile()
 }
 
 fn instantiate(binary: &[u8]) -> Result<Instance> {
@@ -52,7 +32,7 @@ mod tests {
 
     #[test]
     fn should_run_wasm() {
-        let result = execute().unwrap();
+        let result = execute(42).unwrap();
         assert_eq!(result, 42);
     }
 }
