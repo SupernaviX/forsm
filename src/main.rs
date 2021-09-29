@@ -1,8 +1,9 @@
 use anyhow::Result;
-use forsm::execute;
+use forsm::{build, next};
 
 fn main() -> Result<()> {
-    let result = execute(1337)?;
-    println!("Hello, world! {:?}", result);
+    let instance = build("Hello, world!")?;
+    let result = next(&instance).unwrap();
+    println!("{}", result);
     Ok(())
 }

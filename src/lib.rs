@@ -1,21 +1,37 @@
 mod generator;
 use anyhow::{anyhow, Result};
 use generator::Generator;
+use std::{cell::Cell, str};
 use wasmer::{imports, Instance, Module, Store, Value};
 
-pub fn execute(output: i32) -> Result<i32> {
-    let binary = generate_code(output)?;
+pub fn build(input: &str) -> Result<Instance> {
+    let binary = generate(input)?;
     let instance = instantiate(&binary)?;
-    let test = instance.exports.get_function("test")?;
-    let result = test.call(&[])?;
+    Ok(instance)
+}
+
+pub fn next(instance: &Instance) -> Result<String> {
+    let parse = instance.exports.get_function("parse")?;
+    let result = parse.call(&[Value::I32(' ' as i32)])?;
     match *result {
-        [Value::I32(n)] => Ok(n),
+        [Value::I32(start), Value::I32(len)] => {
+            let memory = instance.exports.get_memory("memory")?;
+            let view = memory.view();
+            let start = start as usize;
+            let end = start + len as usize;
+            let result_bytes: Vec<u8> = view[start..end].iter().map(Cell::get).collect();
+            let result = str::from_utf8(&result_bytes)?.to_owned();
+            Ok(result)
+        }
         _ => Err(anyhow!("Unexpected output {:?}", result)),
     }
 }
 
-fn generate_code(output: i32) -> Result<Vec<u8>> {
-    Generator::default().add_test_func(output).compile()
+fn generate(input: &str) -> Result<Vec<u8>> {
+    Generator::default()
+        .add_memory()
+        .add_parse(input.into())
+        .compile()
 }
 
 fn instantiate(binary: &[u8]) -> Result<Instance> {
@@ -28,11 +44,16 @@ fn instantiate(binary: &[u8]) -> Result<Instance> {
 
 #[cfg(test)]
 mod tests {
-    use super::execute;
+    use super::{build, next};
 
     #[test]
-    fn should_run_wasm() {
-        let result = execute(42).unwrap();
-        assert_eq!(result, 42);
+    fn should_parse_string() {
+        let instance = build("Hello world!").unwrap();
+        let tok1 = next(&instance).unwrap();
+        assert_eq!(tok1, "Hello");
+        let tok2 = next(&instance).unwrap();
+        assert_eq!(tok2, "world!");
+        let tok3 = next(&instance).unwrap();
+        assert_eq!(tok3, "");
     }
 }
