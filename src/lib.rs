@@ -1,3 +1,4 @@
+mod compiler;
 mod generator;
 use anyhow::{anyhow, Result};
 use generator::Generator;
