@@ -6,25 +6,33 @@ pub struct Generator {
     compiler: Compiler,
 }
 impl Generator {
-    pub fn add_memory(self) -> Self {
+    pub fn define_memory(self) -> Self {
         Self {
             compiler: self.compiler.add_memory(),
-            ..self
         }
     }
 
-    pub fn add_parse(self, value: Vec<u8>) -> Self {
+    pub fn define_parse(self, value: Vec<u8>) -> Self {
         let compiler = self.compiler;
 
-        let len = value.len() as i32;
-        let compiler = compiler.add_data(0, value);
+        let buf_start = 0x100;
+        let buf_end = buf_start + value.len() as i32;
+        let compiler = compiler.add_data(buf_start, value);
 
-        let (compiler, word_start) =
-            compiler.add_global(|g| g.mutable().value_type().i32().init_expr(I32Const(0)));
-        let (compiler, buffer_head) =
-            compiler.add_global(|g| g.mutable().value_type().i32().init_expr(I32Const(0)));
+        let (compiler, word_start) = compiler.add_global(|g| {
+            g.mutable()
+                .value_type()
+                .i32()
+                .init_expr(I32Const(buf_start))
+        });
+        let (compiler, buffer_head) = compiler.add_global(|g| {
+            g.mutable()
+                .value_type()
+                .i32()
+                .init_expr(I32Const(buf_start))
+        });
         let (compiler, buffer_tail) =
-            compiler.add_global(|g| g.mutable().value_type().i32().init_expr(I32Const(len)));
+            compiler.add_global(|g| g.mutable().value_type().i32().init_expr(I32Const(buf_end)));
 
         let params = vec![ValueType::I32];
         const CHAR: u32 = 0;
@@ -95,10 +103,57 @@ impl Generator {
 
         let (compiler, parse) =
             compiler.add_func(params, results, |b| b.with_instructions(instructions));
-        let compiler = compiler.add_export(|e| e.field("parse").internal().func(parse));
+        let compiler = compiler.add_export("parse", |e| e.func(parse));
 
         Self { compiler }
     }
+
+    pub fn define_stack(self) -> Self {
+        let compiler = self.compiler;
+        let (compiler, stack) =
+            compiler.add_global(|g| g.mutable().value_type().i32().init_expr(I32Const(0)));
+
+        #[rustfmt::skip]
+        let push_instructions = vec![
+            // increment stack pointer
+            GetGlobal(stack),
+            I32Const(4),
+            I32Add,
+            SetGlobal(stack),
+
+            // write data
+            GetGlobal(stack),
+            GetLocal(0),
+            I32Store(2, 0),
+            End
+        ];
+        let (compiler, push) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
+            f.with_instructions(Instructions::new(push_instructions))
+        });
+
+        #[rustfmt::skip]
+        let pop_instructions = vec![
+            // read data
+            GetGlobal(stack),
+            I32Load(2, 0),
+
+            // decrement stack pointer
+            GetGlobal(stack),
+            I32Const(4),
+            I32Sub,
+            SetGlobal(stack),
+            End
+        ];
+        let (compiler, pop) = compiler.add_func(vec![], vec![ValueType::I32], |f| {
+            f.with_instructions(Instructions::new(pop_instructions))
+        });
+
+        let compiler = compiler
+            .add_export("push", |e| e.func(push))
+            .add_export("pop", |e| e.func(pop));
+        Self { compiler }
+    }
+
     pub fn compile(self) -> Result<Vec<u8>> {
         self.compiler.compile()
     }

@@ -28,10 +28,29 @@ pub fn next(instance: &Instance) -> Result<String> {
     }
 }
 
+pub fn push(instance: &Instance, value: i32) -> Result<()> {
+    let push = instance.exports.get_function("push")?;
+    let result = push.call(&[Value::I32(value)])?;
+    match *result {
+        [] => Ok(()),
+        _ => Err(anyhow!("Unexpected output {:?}", result)),
+    }
+}
+
+pub fn pop(instance: &Instance) -> Result<i32> {
+    let pop = instance.exports.get_function("pop")?;
+    let result = pop.call(&[])?;
+    match *result {
+        [Value::I32(val)] => Ok(val),
+        _ => Err(anyhow!("Unexpected output {:?}", result)),
+    }
+}
+
 fn generate(input: &str) -> Result<Vec<u8>> {
     Generator::default()
-        .add_memory()
-        .add_parse(input.into())
+        .define_memory()
+        .define_stack()
+        .define_parse(input.into())
         .compile()
 }
 
@@ -45,7 +64,7 @@ fn instantiate(binary: &[u8]) -> Result<Instance> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build, next};
+    use super::{build, next, pop, push};
 
     #[test]
     fn should_parse_string() {
@@ -56,5 +75,18 @@ mod tests {
         assert_eq!(tok2, "world!");
         let tok3 = next(&instance).unwrap();
         assert_eq!(tok3, "");
+    }
+
+    #[test]
+    fn should_manipulate_stack() {
+        let instance = build("Hello world!").unwrap();
+
+        push(&instance, 1).unwrap();
+        push(&instance, 2).unwrap();
+        push(&instance, 3).unwrap();
+
+        assert_eq!(pop(&instance).unwrap(), 3);
+        assert_eq!(pop(&instance).unwrap(), 2);
+        assert_eq!(pop(&instance).unwrap(), 1);
     }
 }

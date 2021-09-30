@@ -1,7 +1,8 @@
 use anyhow::Result;
 use parity_wasm::{
     builder::{
-        self, ExportBuilder, FuncBodyBuilder, FunctionBuilder, GlobalBuilder, ModuleBuilder,
+        self, ExportBuilder, ExportInternalBuilder, FuncBodyBuilder, FunctionBuilder,
+        GlobalBuilder, ModuleBuilder,
     },
     elements::{Instruction::I32Const, ValueType},
     serialize,
@@ -79,11 +80,13 @@ impl Compiler {
         (result, index)
     }
 
-    pub fn add_export<T>(self, define: T) -> Self
+    pub fn add_export<T>(self, field: &str, define: T) -> Self
     where
-        T: FnOnce(ExportBuilder<ModuleBuilder>) -> ExportBuilder<ModuleBuilder>,
+        T: FnOnce(
+            ExportInternalBuilder<ExportBuilder<ModuleBuilder>>,
+        ) -> ExportBuilder<ModuleBuilder>,
     {
-        let builder = define(self.builder.export()).build();
+        let builder = define(self.builder.export().field(field).internal()).build();
         Self { builder, ..self }
     }
 
