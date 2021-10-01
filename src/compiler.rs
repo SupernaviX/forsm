@@ -12,6 +12,7 @@ pub struct Compiler {
     builder: ModuleBuilder,
     globals: u32,
     functions: u32,
+    table_entries: Vec<u32>,
 }
 impl Compiler {
     pub fn add_memory(self) -> Self {
@@ -35,6 +36,12 @@ impl Compiler {
             .value(value)
             .build();
         Self { builder, ..self }
+    }
+
+    pub fn add_table_entry(mut self, func: u32) -> (Self, u32) {
+        let index = self.table_entries.len() as u32;
+        self.table_entries.push(func);
+        (self, index)
     }
 
     pub fn add_global<T>(self, define: T) -> (Self, u32)
@@ -91,7 +98,14 @@ impl Compiler {
     }
 
     pub fn compile(self) -> Result<Vec<u8>> {
-        let binary = serialize(self.builder.build())?;
+        // create the table now that we know what belongs in it
+        let builder = self
+            .builder
+            .table()
+            .with_min(self.table_entries.len() as u32)
+            .with_element(0, self.table_entries)
+            .build();
+        let binary = serialize(builder.build())?;
         Ok(binary)
     }
 }
@@ -103,6 +117,7 @@ impl Default for Compiler {
             builder,
             globals: 0,
             functions: 0,
+            table_entries: vec![],
         }
     }
 }

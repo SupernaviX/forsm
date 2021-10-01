@@ -57,7 +57,6 @@ pub fn add(instance: &Instance) -> Result<()> {
 
 fn generate(input: &str) -> Result<Vec<u8>> {
     Generator::default()
-        .define_memory()
         .define_stack()
         .define_math()
         .define_parse(input.into())

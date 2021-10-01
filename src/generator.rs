@@ -1,20 +1,20 @@
 use super::compiler::Compiler;
 use anyhow::Result;
-use parity_wasm::elements::{BlockType, Instruction::*, Instructions, ValueType};
+use parity_wasm::elements::{
+    BlockType,
+    Instruction::{self, *},
+    Instructions, ValueType,
+};
 
 pub struct Generator {
     compiler: Compiler,
     push: u32,
     pop: u32,
+    cp: i32,
+    last_word_address: i32,
 }
-impl Generator {
-    pub fn define_memory(self) -> Self {
-        Self {
-            compiler: self.compiler.add_memory(),
-            ..self
-        }
-    }
 
+impl Generator {
     pub fn define_parse(self, value: Vec<u8>) -> Self {
         let compiler = self.compiler;
 
@@ -158,42 +158,69 @@ impl Generator {
             compiler,
             push,
             pop,
+            ..self
         }
     }
 
     pub fn define_math(self) -> Self {
-        let compiler = self.compiler;
+        // let compiler = self.compiler;
         let push = self.push;
         let pop = self.pop;
-        let define_math_op = |compiler: Compiler, name, op| {
-            let (compiler, func) = compiler.add_func(vec![], vec![], |f| {
-                f.with_instructions(Instructions::new(vec![
-                    Call(pop),
-                    Call(pop),
-                    op,
-                    Call(push),
-                    End,
-                ]))
-            });
-            compiler.add_export(name, |e| e.func(func))
-        };
-        let compiler = define_math_op(compiler, "+", I32Add);
-        let compiler = define_math_op(compiler, "-", I32Sub);
-        let compiler = define_math_op(compiler, "*", I32Mul);
-        let compiler = define_math_op(compiler, "/", I32DivS);
-        Self { compiler, ..self }
+        let math_op = |op| vec![Call(pop), Call(pop), op, Call(push), End];
+        self.define_native_word("+", math_op(I32Add))
+            .define_native_word("-", math_op(I32Sub))
+            .define_native_word("*", math_op(I32Mul))
+            .define_native_word("/", math_op(I32DivS))
     }
 
     pub fn compile(self) -> Result<Vec<u8>> {
         self.compiler.compile()
     }
+
+    fn define_native_word(self, name: &str, instructions: Vec<Instruction>) -> Self {
+        let compiler = self.compiler;
+
+        let (compiler, func) = compiler.add_func(vec![], vec![], |f| {
+            f.with_instructions(Instructions::new(instructions))
+        });
+        let (compiler, index) = compiler.add_table_entry(func);
+
+        // for testing purposes
+        let compiler = compiler.add_export(name, |e| e.func(func));
+
+        Self { compiler, ..self }.define_word(name, index, &[])
+    }
+
+    fn define_word(self, name: &str, code: u32, parameter: &[u8]) -> Self {
+        let old_last_word_address = self.last_word_address;
+        let last_word_address = self.cp;
+
+        let mut data = Vec::with_capacity(1 + name.len() + 4 + 4 + parameter.len());
+        data.push(name.len() as u8);
+        data.extend_from_slice(name.as_bytes());
+        data.extend_from_slice(&old_last_word_address.to_le_bytes());
+        data.extend_from_slice(&code.to_le_bytes());
+        data.extend_from_slice(parameter);
+
+        let cp = self.cp + data.len() as i32;
+        let compiler = self.compiler.add_data(self.cp, data);
+        Self {
+            compiler,
+            cp,
+            last_word_address,
+            ..self
+        }
+    }
 }
 impl Default for Generator {
     fn default() -> Self {
+        let compiler: Compiler = Default::default();
         Self {
-            compiler: Default::default(),
+            compiler: compiler.add_memory(),
             push: 0,
             pop: 0,
+            cp: 0x1000,
+            last_word_address: 0,
         }
     }
 }
