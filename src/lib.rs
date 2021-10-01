@@ -46,10 +46,20 @@ pub fn pop(instance: &Instance) -> Result<i32> {
     }
 }
 
+pub fn add(instance: &Instance) -> Result<()> {
+    let add = instance.exports.get_function("+")?;
+    let result = add.call(&[])?;
+    match *result {
+        [] => Ok(()),
+        _ => Err(anyhow!("Unexpected output {:?}", result)),
+    }
+}
+
 fn generate(input: &str) -> Result<Vec<u8>> {
     Generator::default()
         .define_memory()
         .define_stack()
+        .define_math()
         .define_parse(input.into())
         .compile()
 }
@@ -64,7 +74,7 @@ fn instantiate(binary: &[u8]) -> Result<Instance> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build, next, pop, push};
+    use super::{add, build, next, pop, push};
 
     #[test]
     fn should_parse_string() {
@@ -88,5 +98,15 @@ mod tests {
         assert_eq!(pop(&instance).unwrap(), 3);
         assert_eq!(pop(&instance).unwrap(), 2);
         assert_eq!(pop(&instance).unwrap(), 1);
+    }
+
+    #[test]
+    fn should_do_math() {
+        let instance = build("Hello world!").unwrap();
+
+        push(&instance, 3).unwrap();
+        push(&instance, 4).unwrap();
+        add(&instance).unwrap();
+        assert_eq!(pop(&instance).unwrap(), 7);
     }
 }

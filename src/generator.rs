@@ -4,11 +4,14 @@ use parity_wasm::elements::{BlockType, Instruction::*, Instructions, ValueType};
 
 pub struct Generator {
     compiler: Compiler,
+    push: u32,
+    pop: u32,
 }
 impl Generator {
     pub fn define_memory(self) -> Self {
         Self {
             compiler: self.compiler.add_memory(),
+            ..self
         }
     }
 
@@ -105,7 +108,7 @@ impl Generator {
             compiler.add_func(params, results, |b| b.with_instructions(instructions));
         let compiler = compiler.add_export("parse", |e| e.func(parse));
 
-        Self { compiler }
+        Self { compiler, ..self }
     }
 
     pub fn define_stack(self) -> Self {
@@ -151,7 +154,34 @@ impl Generator {
         let compiler = compiler
             .add_export("push", |e| e.func(push))
             .add_export("pop", |e| e.func(pop));
-        Self { compiler }
+        Self {
+            compiler,
+            push,
+            pop,
+        }
+    }
+
+    pub fn define_math(self) -> Self {
+        let compiler = self.compiler;
+        let push = self.push;
+        let pop = self.pop;
+        let define_math_op = |compiler: Compiler, name, op| {
+            let (compiler, func) = compiler.add_func(vec![], vec![], |f| {
+                f.with_instructions(Instructions::new(vec![
+                    Call(pop),
+                    Call(pop),
+                    op,
+                    Call(push),
+                    End,
+                ]))
+            });
+            compiler.add_export(name, |e| e.func(func))
+        };
+        let compiler = define_math_op(compiler, "+", I32Add);
+        let compiler = define_math_op(compiler, "-", I32Sub);
+        let compiler = define_math_op(compiler, "*", I32Mul);
+        let compiler = define_math_op(compiler, "/", I32DivS);
+        Self { compiler, ..self }
     }
 
     pub fn compile(self) -> Result<Vec<u8>> {
@@ -162,6 +192,8 @@ impl Default for Generator {
     fn default() -> Self {
         Self {
             compiler: Default::default(),
+            push: 0,
+            pop: 0,
         }
     }
 }
