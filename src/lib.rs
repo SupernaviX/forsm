@@ -48,7 +48,7 @@ pub fn pop(instance: &Instance) -> Result<i32> {
 
 pub fn add(instance: &Instance) -> Result<()> {
     let add = instance.exports.get_function("+")?;
-    let result = add.call(&[Value::I32(0)])?;
+    let result = add.call(&[])?;
     match *result {
         [] => Ok(()),
         _ => Err(anyhow!("Unexpected output {:?}", result)),
@@ -61,7 +61,7 @@ fn generate_parser(input: &str) -> Result<Vec<u8>> {
 
 fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
     Generator::default()
-        .define_stack()
+        .define_stacks()
         .define_constants()
         .define_variables()
         .define_interpreter()
@@ -70,7 +70,8 @@ fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
         .define_constant_word("TWO", 2)
         .define_constant_word("THREE", 3)
         .define_variable_word("TESTVAR", 0)
-        .define_test_word("TEST", words)
+        .define_colon_word("TEST", words)
+        .finalize()
         .compile()
 }
 
@@ -90,7 +91,7 @@ pub fn evaluate(words: Vec<&'static str>) -> Result<Instance> {
     let binary = generate_test(owned_words)?;
     let instance = instantiate(&binary)?;
     let test_func = instance.exports.get_function("TEST")?;
-    let result = test_func.call(&[Value::I32(0)])?;
+    let result = test_func.call(&[])?;
     match *result {
         [] => Ok(instance),
         _ => Err(anyhow!("Unexpected output {:?}", result)),
