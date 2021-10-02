@@ -169,7 +169,7 @@ impl Generator {
     pub fn define_math(self) -> Self {
         let push = self.push;
         let pop = self.pop;
-        let math_op = |op| vec![Call(pop), Call(pop), op, Call(push), End];
+        let math_op = |op| vec![Call(pop), Call(pop), op, Call(push)];
         self.define_native_word("+", math_op(I32Add))
             .define_native_word("-", math_op(I32Sub))
             .define_native_word("*", math_op(I32Mul))
@@ -178,46 +178,27 @@ impl Generator {
 
     pub fn define_constants(self) -> Self {
         let push = self.push;
-        let compiler = self.compiler;
-        let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
-            f.with_instructions(Instructions::new(vec![
-                // The value of our parameter is the value of the constant, just fetch and push it
-                GetLocal(0),
-                I32Load(2, 0),
-                Call(push),
-                End,
-            ]))
-        });
-        let (compiler, docon) = compiler.add_table_entry(func);
-        Self {
-            compiler,
-            docon,
-            ..self
-        }
-        .define_constant_word("DOCON", docon as i32)
+        let (result, _, docon) = self.create_execution_token(vec![
+            // The value of our parameter is the value of the constant, just fetch and push it
+            GetLocal(0),
+            I32Load(2, 0),
+            Call(push),
+        ]);
+        Self { docon, ..result }.define_constant_word("DOCON", docon as i32)
     }
 
     pub fn define_variables(self) -> Self {
         let push = self.push;
         let pop = self.pop;
-        let compiler = self.compiler;
-        let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
-            f.with_instructions(Instructions::new(vec![
-                // the address of our parameter IS the address of the variable, just push it
-                GetLocal(0),
-                Call(push),
-                End,
-            ]))
-        });
-        let (compiler, dovar) = compiler.add_table_entry(func);
-        Self {
-            compiler,
-            dovar,
-            ..self
-        }
-        .define_constant_word("DOVAR", dovar as i32)
-        .define_native_word("!", vec![Call(pop), Call(pop), I32Store(2, 0), End])
-        .define_native_word("@", vec![Call(pop), I32Load(2, 0), Call(push), End])
+        let (result, _, dovar) = self.create_execution_token(vec![
+            // the address of our parameter IS the address of the variable, just push it
+            GetLocal(0),
+            Call(push),
+        ]);
+        Self { dovar, ..result }
+            .define_constant_word("DOVAR", dovar as i32)
+            .define_native_word("!", vec![Call(pop), Call(pop), I32Store(2, 0)])
+            .define_native_word("@", vec![Call(pop), I32Load(2, 0), Call(push)])
     }
 
     pub fn define_interpreter(self) -> Self {
@@ -241,7 +222,6 @@ impl Generator {
                 // and this library doesn't expose those. BUT push is the first-defined function
                 // and it has the right type signature, so 0 works for the type index
                 CallIndirect(0, 0),
-                End,
             ],
         )
     }
@@ -277,7 +257,6 @@ impl Generator {
             instructions.push(GetLocal(0));
             instructions.push(CallIndirect(0, 0));
         }
-        instructions.push(End);
 
         self.define_native_word(name, instructions)
     }
@@ -288,16 +267,22 @@ impl Generator {
     }
 
     fn define_native_word(self, name: &str, instructions: Vec<Instruction>) -> Self {
+        let (result, func, index) = self.create_execution_token(instructions);
+
+        // for testing purposes, export funcs so we can call them directly from rust
+        let compiler = result.compiler.add_export(name, |e| e.func(func));
+
+        Self { compiler, ..result }.define_word(name, index, &[])
+    }
+
+    fn create_execution_token(self, mut instructions: Vec<Instruction>) -> (Self, u32, u32) {
         let compiler = self.compiler;
+        instructions.push(End);
         let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
             f.with_instructions(Instructions::new(instructions))
         });
         let (compiler, index) = compiler.add_table_entry(func);
-
-        // for testing purposes, export funcs so we can call them directly from rust
-        let compiler = compiler.add_export(name, |e| e.func(func));
-
-        Self { compiler, ..self }.define_word(name, index, &[])
+        (Self { compiler, ..self }, func, index)
     }
 
     fn define_word(mut self, name: &str, code: u32, parameter: &[u8]) -> Self {
