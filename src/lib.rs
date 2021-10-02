@@ -62,11 +62,14 @@ fn generate_parser(input: &str) -> Result<Vec<u8>> {
 fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
     Generator::default()
         .define_stack()
+        .define_constants()
+        .define_variables()
         .define_interpreter()
         .define_math()
-        .define_literal_word("ONE", 1)
-        .define_literal_word("TWO", 2)
-        .define_literal_word("THREE", 3)
+        .define_constant_word("ONE", 1)
+        .define_constant_word("TWO", 2)
+        .define_constant_word("THREE", 3)
+        .define_variable_word("TESTVAR", 0)
         .define_test_word("TEST", words)
         .compile()
 }
@@ -138,5 +141,12 @@ mod tests {
         let instance = evaluate(vec!["TWO", "THREE", "+"]).unwrap();
 
         assert_eq!(pop(&instance).unwrap(), 5);
+    }
+
+    #[test]
+    fn should_support_variables() {
+        let instance = evaluate(vec!["ONE", "TESTVAR", "!", "TESTVAR", "@"]).unwrap();
+
+        assert_eq!(pop(&instance).unwrap(), 1);
     }
 }

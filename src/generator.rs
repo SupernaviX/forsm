@@ -11,6 +11,8 @@ pub struct Generator {
     compiler: Compiler,
     push: u32,
     pop: u32,
+    docon: u32,
+    dovar: u32,
     cp: i32,
     last_word_address: i32,
     execution_tokens: HashMap<String, i32>,
@@ -174,6 +176,50 @@ impl Generator {
             .define_native_word("/", math_op(I32DivS))
     }
 
+    pub fn define_constants(self) -> Self {
+        let push = self.push;
+        let compiler = self.compiler;
+        let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
+            f.with_instructions(Instructions::new(vec![
+                // The value of our parameter is the value of the constant, just fetch and push it
+                GetLocal(0),
+                I32Load(2, 0),
+                Call(push),
+                End,
+            ]))
+        });
+        let (compiler, docon) = compiler.add_table_entry(func);
+        Self {
+            compiler,
+            docon,
+            ..self
+        }
+        .define_constant_word("DOCON", docon as i32)
+    }
+
+    pub fn define_variables(self) -> Self {
+        let push = self.push;
+        let pop = self.pop;
+        let compiler = self.compiler;
+        let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
+            f.with_instructions(Instructions::new(vec![
+                // the address of our parameter IS the address of the variable, just push it
+                GetLocal(0),
+                Call(push),
+                End,
+            ]))
+        });
+        let (compiler, dovar) = compiler.add_table_entry(func);
+        Self {
+            compiler,
+            dovar,
+            ..self
+        }
+        .define_constant_word("DOVAR", dovar as i32)
+        .define_native_word("!", vec![Call(pop), Call(pop), I32Store(2, 0), End])
+        .define_native_word("@", vec![Call(pop), I32Load(2, 0), Call(push), End])
+    }
+
     pub fn define_interpreter(self) -> Self {
         let pop = self.pop;
         self.define_native_word(
@@ -200,10 +246,14 @@ impl Generator {
         )
     }
 
-    // It's easier to write a word-that-returns-a-literal than a number parser
-    pub fn define_literal_word(self, name: &str, value: i32) -> Self {
-        let push = self.push;
-        self.define_native_word(name, vec![I32Const(value), Call(push), End])
+    pub fn define_constant_word(self, name: &str, value: i32) -> Self {
+        let docon = self.docon;
+        self.define_word(name, docon, &value.to_le_bytes())
+    }
+
+    pub fn define_variable_word(self, name: &str, initial_value: i32) -> Self {
+        let dovar = self.dovar;
+        self.define_word(name, dovar, &initial_value.to_le_bytes())
     }
 
     pub fn define_test_word(self, name: &str, words: Vec<String>) -> Self {
@@ -233,7 +283,8 @@ impl Generator {
     }
 
     pub fn compile(self) -> Result<Vec<u8>> {
-        self.compiler.compile()
+        let cp = self.cp;
+        self.define_variable_word("CP", cp).compiler.compile()
     }
 
     fn define_native_word(self, name: &str, instructions: Vec<Instruction>) -> Self {
@@ -283,6 +334,8 @@ impl Default for Generator {
             compiler: compiler.add_memory(),
             push: 0,
             pop: 0,
+            docon: 0,
+            dovar: 0,
             cp: 0x1000,
             last_word_address: 0,
             execution_tokens: HashMap::new(),
