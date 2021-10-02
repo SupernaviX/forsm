@@ -60,19 +60,13 @@ fn generate_parser(input: &str) -> Result<Vec<u8>> {
 }
 
 fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
-    Generator::default()
-        .define_stacks()
-        .define_constants()
-        .define_variables()
-        .define_interpreter()
-        .define_math()
-        .define_constant_word("ONE", 1)
-        .define_constant_word("TWO", 2)
-        .define_constant_word("THREE", 3)
-        .define_variable_word("TESTVAR", 0)
-        .define_colon_word("TEST", words)
-        .finalize()
-        .compile()
+    let mut gen = Generator::default().initialize();
+    gen.define_constant_word("ONE", 1);
+    gen.define_constant_word("TWO", 2);
+    gen.define_constant_word("THREE", 3);
+    gen.define_variable_word("TESTVAR", 0);
+    gen.define_colon_word("TEST", words);
+    gen.finalize().compile()
 }
 
 fn instantiate(binary: &[u8]) -> Result<Instance> {

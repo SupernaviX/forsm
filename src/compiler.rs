@@ -9,98 +9,79 @@ use parity_wasm::{
 };
 
 pub struct Compiler {
-    builder: ModuleBuilder,
+    builder: Option<ModuleBuilder>,
     globals: u32,
     functions: u32,
     table_entries: Vec<u32>,
 }
 impl Compiler {
-    pub fn add_memory(self) -> Self {
-        let builder = self
-            .builder
-            .memory()
-            .build()
-            .export()
-            .field("memory")
-            .internal()
-            .memory(0)
-            .build();
-        Self { builder, ..self }
+    pub fn add_memory(&mut self) {
+        self.update(|builder| {
+            builder
+                .memory()
+                .build()
+                .export()
+                .field("memory")
+                .internal()
+                .memory(0)
+                .build()
+        });
     }
 
-    pub fn add_data(self, offset: i32, value: Vec<u8>) -> Self {
-        let builder = self
-            .builder
-            .data()
-            .offset(I32Const(offset))
-            .value(value)
-            .build();
-        Self { builder, ..self }
+    pub fn add_data(&mut self, offset: i32, value: Vec<u8>) {
+        self.update(|builder| builder.data().offset(I32Const(offset)).value(value).build());
     }
 
-    pub fn add_table_entry(mut self, func: u32) -> (Self, u32) {
+    pub fn add_table_entry(&mut self, func: u32) -> u32 {
         let index = self.table_entries.len() as u32;
         self.table_entries.push(func);
-        (self, index)
+        index
     }
 
-    pub fn add_global<T>(self, define: T) -> (Self, u32)
+    pub fn add_global<T>(&mut self, define: T) -> u32
     where
         T: FnOnce(GlobalBuilder<ModuleBuilder>) -> GlobalBuilder<ModuleBuilder>,
     {
-        let builder = define(self.builder.global()).build();
+        self.update(|b| define(b.global()).build());
         let index = self.globals;
-        let result = Self {
-            builder,
-            globals: self.globals + 1,
-            ..self
-        };
-        (result, index)
+        self.globals += 1;
+        index
     }
 
-    pub fn add_func<T>(
-        self,
-        params: Vec<ValueType>,
-        results: Vec<ValueType>,
-        body: T,
-    ) -> (Self, u32)
+    pub fn add_func<T>(&mut self, params: Vec<ValueType>, results: Vec<ValueType>, body: T) -> u32
     where
         T: FnOnce(
             FuncBodyBuilder<FunctionBuilder<ModuleBuilder>>,
         ) -> FuncBodyBuilder<FunctionBuilder<ModuleBuilder>>,
     {
-        let body_builder = self
-            .builder
-            .function()
-            .signature()
-            .with_params(params)
-            .with_results(results)
-            .build()
-            .body();
-        let builder = body(body_builder).build().build();
+        self.update(|builder| {
+            let body_builder = builder
+                .function()
+                .signature()
+                .with_params(params)
+                .with_results(results)
+                .build()
+                .body();
+            body(body_builder).build().build()
+        });
         let index = self.functions;
-        let result = Self {
-            builder,
-            functions: self.functions + 1,
-            ..self
-        };
-        (result, index)
+        self.functions += 1;
+        index
     }
 
-    pub fn add_export<T>(self, field: &str, define: T) -> Self
+    pub fn add_export<T>(&mut self, field: &str, define: T)
     where
         T: FnOnce(
             ExportInternalBuilder<ExportBuilder<ModuleBuilder>>,
         ) -> ExportBuilder<ModuleBuilder>,
     {
-        let builder = define(self.builder.export().field(field).internal()).build();
-        Self { builder, ..self }
+        self.update(|b| define(b.export().field(field).internal()).build());
     }
 
     pub fn compile(self) -> Result<Vec<u8>> {
-        // create the table now that we know what belongs in it
         let builder = self
             .builder
+            .unwrap()
             .table()
             .with_min(self.table_entries.len() as u32)
             .with_element(0, self.table_entries)
@@ -109,11 +90,18 @@ impl Compiler {
         let binary = serialize(module)?;
         Ok(binary)
     }
+
+    fn update<T>(&mut self, func: T)
+    where
+        T: FnOnce(ModuleBuilder) -> ModuleBuilder,
+    {
+        self.builder = self.builder.take().map(func);
+    }
 }
 
 impl Default for Compiler {
     fn default() -> Self {
-        let builder = builder::module();
+        let builder = Some(builder::module());
         Self {
             builder,
             globals: 0,
