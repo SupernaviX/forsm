@@ -1,9 +1,11 @@
 use anyhow::Result;
-use forsm::{build, next};
+use forsm::{build_parser, evaluate, next_token};
 
 fn main() -> Result<()> {
-    let instance = build("Hello, world!")?;
-    let result = next(&instance).unwrap();
+    let instance = build_parser("Hello, world!")?;
+    let result = next_token(&instance).unwrap();
     println!("{}", result);
+
+    evaluate(vec!["TWO", "THREE", "+"])?;
     Ok(())
 }

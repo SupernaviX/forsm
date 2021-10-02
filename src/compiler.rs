@@ -105,7 +105,8 @@ impl Compiler {
             .with_min(self.table_entries.len() as u32)
             .with_element(0, self.table_entries)
             .build();
-        let binary = serialize(builder.build())?;
+        let module = builder.build();
+        let binary = serialize(module)?;
         Ok(binary)
     }
 }

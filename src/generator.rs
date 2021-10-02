@@ -5,6 +5,7 @@ use parity_wasm::elements::{
     Instruction::{self, *},
     Instructions, ValueType,
 };
+use std::collections::HashMap;
 
 pub struct Generator {
     compiler: Compiler,
@@ -12,6 +13,7 @@ pub struct Generator {
     pop: u32,
     cp: i32,
     last_word_address: i32,
+    execution_tokens: HashMap<String, i32>,
 }
 
 impl Generator {
@@ -163,7 +165,6 @@ impl Generator {
     }
 
     pub fn define_math(self) -> Self {
-        // let compiler = self.compiler;
         let push = self.push;
         let pop = self.pop;
         let math_op = |op| vec![Call(pop), Call(pop), op, Call(push), End];
@@ -173,25 +174,82 @@ impl Generator {
             .define_native_word("/", math_op(I32DivS))
     }
 
+    pub fn define_interpreter(self) -> Self {
+        let pop = self.pop;
+        self.define_native_word(
+            "EXECUTE",
+            vec![
+                // get the execution token from the stack
+                Call(pop),
+                // h4x: this function takes a parameter which it doesn't need,
+                // use the slot as a local for the XT
+                TeeLocal(0),
+                // in this system, an execution token is the 32-bit address of a table index,
+                // with the parameter data (if any) stored immediately after it.
+                // Call the func with the address of the parameter data.
+                I32Const(4),
+                I32Add,
+                GetLocal(0),
+                I32Load(2, 0),
+                // h4x: the first parameter of call_indirect is a type index
+                // and this library doesn't expose those. BUT push is the first-defined function
+                // and it has the right type signature, so 0 works for the type index
+                CallIndirect(0, 0),
+                End,
+            ],
+        )
+    }
+
+    // It's easier to write a word-that-returns-a-literal than a number parser
+    pub fn define_literal_word(self, name: &str, value: i32) -> Self {
+        let push = self.push;
+        self.define_native_word(name, vec![I32Const(value), Call(push), End])
+    }
+
+    pub fn define_test_word(self, name: &str, words: Vec<String>) -> Self {
+        let push = self.push;
+        let execute_xt = *self.execution_tokens.get("EXECUTE").unwrap();
+
+        let mut instructions = vec![
+            // store the table index of EXECUTE in our free local
+            I32Const(execute_xt),
+            I32Load(2, 0),
+            SetLocal(0),
+        ];
+        for word in &words {
+            // We have the execution tokens of every word,
+            // so call EXECUTE with them one-at-a-time
+            let xt = *self.execution_tokens.get(word).unwrap();
+            instructions.push(I32Const(xt));
+            instructions.push(Call(push));
+
+            instructions.push(I32Const(0)); // give execute a dummy param on the (wasm) stack
+            instructions.push(GetLocal(0));
+            instructions.push(CallIndirect(0, 0));
+        }
+        instructions.push(End);
+
+        self.define_native_word(name, instructions)
+    }
+
     pub fn compile(self) -> Result<Vec<u8>> {
         self.compiler.compile()
     }
 
     fn define_native_word(self, name: &str, instructions: Vec<Instruction>) -> Self {
         let compiler = self.compiler;
-
-        let (compiler, func) = compiler.add_func(vec![], vec![], |f| {
+        let (compiler, func) = compiler.add_func(vec![ValueType::I32], vec![], |f| {
             f.with_instructions(Instructions::new(instructions))
         });
         let (compiler, index) = compiler.add_table_entry(func);
 
-        // for testing purposes
+        // for testing purposes, export funcs so we can call them directly from rust
         let compiler = compiler.add_export(name, |e| e.func(func));
 
         Self { compiler, ..self }.define_word(name, index, &[])
     }
 
-    fn define_word(self, name: &str, code: u32, parameter: &[u8]) -> Self {
+    fn define_word(mut self, name: &str, code: u32, parameter: &[u8]) -> Self {
         let old_last_word_address = self.last_word_address;
         let last_word_address = self.cp;
 
@@ -201,6 +259,12 @@ impl Generator {
         data.extend_from_slice(&old_last_word_address.to_le_bytes());
         data.extend_from_slice(&code.to_le_bytes());
         data.extend_from_slice(parameter);
+
+        // for testing purposes, store execution tokens for later
+        self.execution_tokens.insert(
+            name.to_owned(),
+            last_word_address + 1 + name.len() as i32 + 4,
+        );
 
         let cp = self.cp + data.len() as i32;
         let compiler = self.compiler.add_data(self.cp, data);
@@ -221,6 +285,7 @@ impl Default for Generator {
             pop: 0,
             cp: 0x1000,
             last_word_address: 0,
+            execution_tokens: HashMap::new(),
         }
     }
 }

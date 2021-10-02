@@ -5,13 +5,13 @@ use generator::Generator;
 use std::{cell::Cell, str};
 use wasmer::{imports, Instance, Module, Store, Value};
 
-pub fn build(input: &str) -> Result<Instance> {
-    let binary = generate(input)?;
+pub fn build_parser(input: &str) -> Result<Instance> {
+    let binary = generate_parser(input)?;
     let instance = instantiate(&binary)?;
     Ok(instance)
 }
 
-pub fn next(instance: &Instance) -> Result<String> {
+pub fn next_token(instance: &Instance) -> Result<String> {
     let parse = instance.exports.get_function("parse")?;
     let result = parse.call(&[Value::I32(' ' as i32)])?;
     match *result {
@@ -48,18 +48,26 @@ pub fn pop(instance: &Instance) -> Result<i32> {
 
 pub fn add(instance: &Instance) -> Result<()> {
     let add = instance.exports.get_function("+")?;
-    let result = add.call(&[])?;
+    let result = add.call(&[Value::I32(0)])?;
     match *result {
         [] => Ok(()),
         _ => Err(anyhow!("Unexpected output {:?}", result)),
     }
 }
 
-fn generate(input: &str) -> Result<Vec<u8>> {
+fn generate_parser(input: &str) -> Result<Vec<u8>> {
+    Generator::default().define_parse(input.into()).compile()
+}
+
+fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
     Generator::default()
         .define_stack()
+        .define_interpreter()
         .define_math()
-        .define_parse(input.into())
+        .define_literal_word("ONE", 1)
+        .define_literal_word("TWO", 2)
+        .define_literal_word("THREE", 3)
+        .define_test_word("TEST", words)
         .compile()
 }
 
@@ -71,24 +79,39 @@ fn instantiate(binary: &[u8]) -> Result<Instance> {
     Ok(instance)
 }
 
+pub fn evaluate(words: Vec<&'static str>) -> Result<Instance> {
+    let mut owned_words = vec![];
+    for word in words {
+        owned_words.push(word.to_owned());
+    }
+    let binary = generate_test(owned_words)?;
+    let instance = instantiate(&binary)?;
+    let test_func = instance.exports.get_function("TEST")?;
+    let result = test_func.call(&[Value::I32(0)])?;
+    match *result {
+        [] => Ok(instance),
+        _ => Err(anyhow!("Unexpected output {:?}", result)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{add, build, next, pop, push};
+    use super::{add, build_parser, evaluate, next_token, pop, push};
 
     #[test]
     fn should_parse_string() {
-        let instance = build("Hello world!").unwrap();
-        let tok1 = next(&instance).unwrap();
+        let instance = build_parser("Hello world!").unwrap();
+        let tok1 = next_token(&instance).unwrap();
         assert_eq!(tok1, "Hello");
-        let tok2 = next(&instance).unwrap();
+        let tok2 = next_token(&instance).unwrap();
         assert_eq!(tok2, "world!");
-        let tok3 = next(&instance).unwrap();
+        let tok3 = next_token(&instance).unwrap();
         assert_eq!(tok3, "");
     }
 
     #[test]
     fn should_manipulate_stack() {
-        let instance = build("Hello world!").unwrap();
+        let instance = evaluate(vec![]).unwrap();
 
         push(&instance, 1).unwrap();
         push(&instance, 2).unwrap();
@@ -101,11 +124,19 @@ mod tests {
 
     #[test]
     fn should_do_math() {
-        let instance = build("Hello world!").unwrap();
+        let instance = evaluate(vec![]).unwrap();
 
         push(&instance, 3).unwrap();
         push(&instance, 4).unwrap();
         add(&instance).unwrap();
+
         assert_eq!(pop(&instance).unwrap(), 7);
+    }
+
+    #[test]
+    fn should_execute() {
+        let instance = evaluate(vec!["TWO", "THREE", "+"]).unwrap();
+
+        assert_eq!(pop(&instance).unwrap(), 5);
     }
 }
