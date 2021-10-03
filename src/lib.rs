@@ -6,7 +6,7 @@ use std::{cell::Cell, str};
 use wasmer::{imports, Instance, Module, Store, Value};
 
 pub fn build_parser(input: &str) -> Result<Instance> {
-    let binary = generate_parser(input)?;
+    let binary = Generator::default().define_parse(input.into()).compile()?;
     let instance = instantiate(&binary)?;
     Ok(instance)
 }
@@ -46,27 +46,13 @@ pub fn pop(instance: &Instance) -> Result<i32> {
     }
 }
 
-pub fn add(instance: &Instance) -> Result<()> {
-    let add = instance.exports.get_function("+")?;
-    let result = add.call(&[])?;
+pub fn execute(instance: &Instance, word: &str) -> Result<()> {
+    let word = instance.exports.get_function(word)?;
+    let result = word.call(&[])?;
     match *result {
         [] => Ok(()),
         _ => Err(anyhow!("Unexpected output {:?}", result)),
     }
-}
-
-fn generate_parser(input: &str) -> Result<Vec<u8>> {
-    Generator::default().define_parse(input.into()).compile()
-}
-
-fn generate_test(words: Vec<String>) -> Result<Vec<u8>> {
-    let mut gen = Generator::default().initialize();
-    gen.define_constant_word("ONE", 1);
-    gen.define_constant_word("TWO", 2);
-    gen.define_constant_word("THREE", 3);
-    gen.define_variable_word("TESTVAR", 0);
-    gen.define_colon_word("TEST", words);
-    gen.finalize().compile()
 }
 
 fn instantiate(binary: &[u8]) -> Result<Instance> {
@@ -77,24 +63,19 @@ fn instantiate(binary: &[u8]) -> Result<Instance> {
     Ok(instance)
 }
 
-pub fn evaluate(words: Vec<&'static str>) -> Result<Instance> {
-    let mut owned_words = vec![];
-    for word in words {
-        owned_words.push(word.to_owned());
-    }
-    let binary = generate_test(owned_words)?;
-    let instance = instantiate(&binary)?;
-    let test_func = instance.exports.get_function("TEST")?;
-    let result = test_func.call(&[])?;
-    match *result {
-        [] => Ok(instance),
-        _ => Err(anyhow!("Unexpected output {:?}", result)),
-    }
+pub fn build<T>(func: T) -> Result<Instance>
+where
+    T: FnOnce(&mut Generator),
+{
+    let mut gen = Generator::default().initialize();
+    func(&mut gen);
+    let binary = gen.finalize().compile()?;
+    instantiate(&binary)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{add, build_parser, evaluate, next_token, pop, push};
+    use super::{build, build_parser, execute, next_token, pop, push};
 
     #[test]
     fn should_parse_string() {
@@ -109,7 +90,7 @@ mod tests {
 
     #[test]
     fn should_manipulate_stack() {
-        let instance = evaluate(vec![]).unwrap();
+        let instance = build(|_| {}).unwrap();
 
         push(&instance, 1).unwrap();
         push(&instance, 2).unwrap();
@@ -122,26 +103,91 @@ mod tests {
 
     #[test]
     fn should_do_math() {
-        let instance = evaluate(vec![]).unwrap();
+        let instance = build(|_| {}).unwrap();
 
         push(&instance, 3).unwrap();
         push(&instance, 4).unwrap();
-        add(&instance).unwrap();
+        execute(&instance, "+").unwrap();
 
         assert_eq!(pop(&instance).unwrap(), 7);
     }
 
     #[test]
-    fn should_execute() {
-        let instance = evaluate(vec!["TWO", "THREE", "+"]).unwrap();
+    fn should_do_division() {
+        let instance = build(|_| {}).unwrap();
 
+        push(&instance, 6).unwrap();
+        push(&instance, 3).unwrap();
+        execute(&instance, "/").unwrap();
+
+        assert_eq!(pop(&instance).unwrap(), 2);
+    }
+
+    #[test]
+    fn should_support_colon_words() {
+        let instance = build(|gen| {
+            gen.define_constant_word("TWO", 2);
+            gen.define_constant_word("THREE", 3);
+            gen.define_colon_word("TEST", vec!["TWO", "THREE", "+"]);
+        })
+        .unwrap();
+        execute(&instance, "TEST").unwrap();
         assert_eq!(pop(&instance).unwrap(), 5);
     }
 
     #[test]
     fn should_support_variables() {
-        let instance = evaluate(vec!["ONE", "TESTVAR", "!", "TESTVAR", "@"]).unwrap();
-
+        let instance = build(|gen| {
+            gen.define_constant_word("ONE", 1);
+            gen.define_variable_word("TESTVAR", 0);
+            gen.define_colon_word("TEST", vec!["ONE", "TESTVAR", "!", "TESTVAR", "@"]);
+        })
+        .unwrap();
+        execute(&instance, "TEST").unwrap();
         assert_eq!(pop(&instance).unwrap(), 1);
+    }
+
+    #[test]
+    fn should_dup() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 1).unwrap();
+        execute(&instance, "DUP").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 1);
+        assert_eq!(pop(&instance).unwrap(), 1);
+    }
+
+    #[test]
+    fn should_swap() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 1).unwrap();
+        push(&instance, 2).unwrap();
+        execute(&instance, "SWAP").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 1);
+        assert_eq!(pop(&instance).unwrap(), 2);
+    }
+
+    #[test]
+    fn should_support_stack_manip() {
+        let instance = build(|gen| {
+            gen.define_constant_word("THREE", 3);
+            gen.define_colon_word("TEST", vec!["THREE", "DUP", "DUP", "+", "SWAP", "/"]);
+        })
+        .unwrap();
+        execute(&instance, "TEST").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 2);
+    }
+
+    #[test]
+    fn should_support_nested_colon_calls() {
+        let instance = build(|gen| {
+            gen.define_constant_word("THREE", 3);
+            gen.define_colon_word("SQUARE", vec!["DUP", "*"]);
+            gen.define_colon_word("TEST", vec!["THREE", "SQUARE"]);
+        })
+        .unwrap();
+        execute(&instance, "TEST").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 9);
     }
 }

@@ -116,9 +116,7 @@ impl Generator {
     }
 
     fn define_stacks(&mut self) {
-        let mut define_stack = |head| {
-            let stack = self.add_global(head);
-
+        let define_stack = |compiler: &mut Compiler, stack| {
             let push_instructions = vec![
                 // increment stack pointer
                 GetGlobal(stack),
@@ -131,7 +129,7 @@ impl Generator {
                 I32Store(2, 0),
                 End,
             ];
-            let push = self.compiler.add_func(vec![ValueType::I32], vec![], |f| {
+            let push = compiler.add_func(vec![ValueType::I32], vec![], |f| {
                 f.with_instructions(Instructions::new(push_instructions))
             });
 
@@ -146,23 +144,61 @@ impl Generator {
                 SetGlobal(stack),
                 End,
             ];
-            let pop = self.compiler.add_func(vec![], vec![ValueType::I32], |f| {
+            let pop = compiler.add_func(vec![], vec![ValueType::I32], |f| {
                 f.with_instructions(Instructions::new(pop_instructions))
             });
 
             (push, pop)
         };
         // define the normal stack
-        let (push, pop) = define_stack(0x00);
+        let stack = self.add_global(0x00);
+        let (push, pop) = define_stack(&mut self.compiler, stack);
+        self.push = push;
+        self.pop = pop;
         // define the return stack
-        let (push_r, pop_r) = define_stack(0x80);
+        let r_stack = self.add_global(0x80);
+        let (push_r, pop_r) = define_stack(&mut self.compiler, r_stack);
+        self.push_r = push_r;
+        self.pop_r = pop_r;
 
         self.compiler.add_export("push", |e| e.func(push));
         self.compiler.add_export("pop", |e| e.func(pop));
-        self.push = push;
-        self.pop = pop;
-        self.push_r = push_r;
-        self.pop_r = pop_r;
+        self.define_native_word(
+            "DUP",
+            vec![
+                // just push the top of the stack onto itself
+                GetGlobal(stack),
+                I32Load(2, 0),
+                Call(push),
+            ],
+        );
+        self.define_native_word(
+            "DROP",
+            vec![
+                // just decrement the stack pointer
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                SetGlobal(stack),
+            ],
+        );
+        self.define_native_word(
+            "SWAP",
+            vec![
+                // don't bother touching the stack pointer
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 4),
+                I32Store(2, 0),
+                I32Store(2, 4),
+            ],
+        );
     }
 
     fn define_constants(&mut self) {
@@ -267,7 +303,17 @@ impl Generator {
     pub fn define_math(&mut self) {
         let push = self.push;
         let pop = self.pop;
-        let math_op = |op| vec![Call(pop), Call(pop), op, Call(push)];
+        let math_op = |op| {
+            vec![
+                //swap the top of the stack before calling the real ops
+                Call(pop),
+                SetLocal(0),
+                Call(pop),
+                GetLocal(0),
+                op,
+                Call(push),
+            ]
+        };
         self.define_native_word("+", math_op(I32Add));
         self.define_native_word("-", math_op(I32Sub));
         self.define_native_word("*", math_op(I32Mul));
@@ -284,9 +330,9 @@ impl Generator {
         self.define_word(name, dovar, &initial_value.to_le_bytes());
     }
 
-    pub fn define_colon_word(&mut self, name: &str, mut words: Vec<String>) {
+    pub fn define_colon_word(&mut self, name: &str, mut words: Vec<&str>) {
         let docol = self.docol;
-        words.push(";".to_string());
+        words.push(";");
         let xts: Vec<u8> = words
             .iter()
             .map(|w| self.get_execution_token(w))
@@ -332,8 +378,7 @@ impl Generator {
         let func = self.compiler.add_func(vec![ValueType::I32], vec![], |f| {
             f.with_instructions(Instructions::new(instructions))
         });
-        let index = self.compiler.add_table_entry(func);
-        index
+        self.compiler.add_table_entry(func)
     }
 
     fn get_execution_token(&self, name: &str) -> i32 {
