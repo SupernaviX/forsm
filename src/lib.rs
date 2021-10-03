@@ -124,6 +124,53 @@ mod tests {
     }
 
     #[test]
+    fn should_do_comparisons() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 2).unwrap();
+        push(&instance, 1).unwrap();
+        execute(&instance, ">").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+
+        push(&instance, 1).unwrap();
+        execute(&instance, "<0").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 0);
+    }
+
+    #[test]
+    fn should_handle_signed_div_and_mod() {
+        let instance = build(|_| {}).unwrap();
+        type TestCase = ((i32, i32), (i32, i32));
+
+        let test_cases: Vec<TestCase> = vec![
+            ((7, 4), (1, 3)),
+            ((-7, 4), (-2, 1)),
+            ((7, -4), (-2, -1)),
+            ((-7, -4), (1, -3)),
+        ];
+
+        let results: Vec<TestCase> = test_cases
+            .iter()
+            .map(|case| {
+                let ((divisor, dividend), _) = *case;
+
+                push(&instance, divisor).unwrap();
+                push(&instance, dividend).unwrap();
+                execute(&instance, "/").unwrap();
+                let quotient = pop(&instance).unwrap();
+
+                push(&instance, divisor).unwrap();
+                push(&instance, dividend).unwrap();
+                execute(&instance, "MOD").unwrap();
+                let modulo = pop(&instance).unwrap();
+
+                ((divisor, dividend), (quotient, modulo))
+            })
+            .collect();
+        assert_eq!(results, test_cases);
+    }
+
+    #[test]
     fn should_support_colon_words() {
         let instance = build(|gen| {
             gen.define_colon_word("TEST", vec![Lit(2), Lit(3), XT("+")]);

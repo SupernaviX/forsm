@@ -1,10 +1,10 @@
 use anyhow::Result;
 use parity_wasm::{
-    builder::{
-        self, ExportBuilder, ExportInternalBuilder, FuncBodyBuilder, FunctionBuilder,
-        GlobalBuilder, ModuleBuilder,
+    builder::{self, ExportBuilder, ExportInternalBuilder, GlobalBuilder, ModuleBuilder},
+    elements::{
+        Instruction::{self, I32Const},
+        Instructions, Local, ValueType,
     },
-    elements::{Instruction::I32Const, ValueType},
     serialize,
 };
 
@@ -48,21 +48,25 @@ impl Compiler {
         index
     }
 
-    pub fn add_func<T>(&mut self, params: Vec<ValueType>, results: Vec<ValueType>, body: T) -> u32
-    where
-        T: FnOnce(
-            FuncBodyBuilder<FunctionBuilder<ModuleBuilder>>,
-        ) -> FuncBodyBuilder<FunctionBuilder<ModuleBuilder>>,
-    {
+    pub fn add_func(
+        &mut self,
+        params: Vec<ValueType>,
+        results: Vec<ValueType>,
+        locals: Vec<ValueType>,
+        instructions: Vec<Instruction>,
+    ) -> u32 {
         self.update(|builder| {
-            let body_builder = builder
+            builder
                 .function()
                 .signature()
                 .with_params(params)
                 .with_results(results)
                 .build()
-                .body();
-            body(body_builder).build().build()
+                .body()
+                .with_locals(locals.iter().map(|t| Local::new(1, *t)).collect())
+                .with_instructions(Instructions::new(instructions))
+                .build()
+                .build()
         });
         let index = self.functions;
         self.functions += 1;
