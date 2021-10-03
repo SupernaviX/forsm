@@ -117,9 +117,81 @@ impl Generator {
         self.define_stacks();
         self.define_constants();
         self.define_variables();
-        self.define_interpreter();
+        self.define_execution();
         self.define_math();
         self
+    }
+
+    pub fn define_constant_word(&mut self, name: &str, value: i32) {
+        let docon = self.docon;
+        self.define_word(name, docon, &value.to_le_bytes());
+    }
+
+    pub fn define_variable_word(&mut self, name: &str, initial_value: i32) {
+        let dovar = self.dovar;
+        self.define_word(name, dovar, &initial_value.to_le_bytes());
+    }
+
+    pub fn define_colon_word(&mut self, name: &str, values: Vec<ColonValue>) {
+        let docol = self.docol;
+        let lit_xt = self.get_execution_token("LIT");
+        let branch_xt = self.get_execution_token("BRANCH");
+        let q_branch_xt = self.get_execution_token("?BRANCH");
+        let mut bytes = vec![];
+        for value in values {
+            match value {
+                ColonValue::XT(name) => {
+                    let xt = self.get_execution_token(name);
+                    bytes.extend_from_slice(&xt.to_le_bytes())
+                }
+                ColonValue::Lit(value) => {
+                    bytes.extend_from_slice(&lit_xt.to_le_bytes());
+                    bytes.extend_from_slice(&value.to_le_bytes());
+                }
+                ColonValue::Branch(offset) => {
+                    bytes.extend_from_slice(&branch_xt.to_le_bytes());
+                    bytes.extend_from_slice(&offset.to_le_bytes());
+                }
+                ColonValue::QBranch(offset) => {
+                    bytes.extend_from_slice(&q_branch_xt.to_le_bytes());
+                    bytes.extend_from_slice(&offset.to_le_bytes());
+                }
+            }
+        }
+        let exit_xt = self.get_execution_token(";");
+        bytes.extend_from_slice(&exit_xt.to_le_bytes());
+
+        self.define_word(name, docol, &bytes);
+    }
+
+    pub fn finalize(mut self) -> Self {
+        // Now that we're done adding things to the dictionary,
+        // define CP (a var containing the next address in the dictionary)
+        // Remember that CP takes up space in the dictionary too!
+        let cp = self.cp
+            + 1 // the byte containing this dictionary entry's length
+            + "CP".len() as i32 // the word name
+            + 4 // the variable's XT
+            + 4; // the variable's storage space
+        self.define_variable_word("CP", cp);
+        self.cp = cp;
+
+        // For testing, export every word as a function-which-EXECUTEs-that-word
+        let execute = self.execute;
+        for (word, xt) in self.execution_tokens.clone() {
+            let func = self.compiler.add_func(
+                vec![],
+                vec![],
+                vec![],
+                vec![I32Const(xt), Call(execute), End],
+            );
+            self.compiler.add_export(&word, |e| e.func(func));
+        }
+        self
+    }
+
+    pub fn compile(self) -> Result<Vec<u8>> {
+        self.compiler.compile()
     }
 
     fn define_stacks(&mut self) {
@@ -222,7 +294,7 @@ impl Generator {
         self.define_constant_word("DOCON", docon as i32);
     }
 
-    pub fn define_variables(&mut self) {
+    fn define_variables(&mut self) {
         let push = self.push;
         let pop = self.pop;
         let dovar = self.create_native_callable(
@@ -239,7 +311,7 @@ impl Generator {
         self.define_native_word("@", 0, vec![Call(pop), I32Load(2, 0), Call(push)]);
     }
 
-    pub fn define_interpreter(&mut self) {
+    fn define_execution(&mut self) {
         let push = self.push;
         let pop = self.pop;
         let push_r = self.push_r;
@@ -343,7 +415,6 @@ impl Generator {
                 I32Load(2, 4),
                 I32Const(4), // Add 4 to account for the size of the literal
                 I32Add,
-
                 GetLocal(0),
                 I32Add,
                 SetGlobal(ip),
@@ -356,7 +427,6 @@ impl Generator {
                 // Branch if the head of the stack is "false" (0)
                 Call(pop),
                 I32Eqz,
-
                 If(BlockType::Value(ValueType::I32)),
                 // Offset is based on the literal after the IP (+4 because of the literal's size)
                 GetGlobal(ip),
@@ -364,13 +434,11 @@ impl Generator {
                 I32Load(2, 4),
                 I32Const(4),
                 I32Add,
-
                 Else, // Offset is just 4
                 GetGlobal(ip),
                 SetLocal(0),
                 I32Const(4),
                 End,
-
                 GetLocal(0),
                 I32Add,
                 SetGlobal(ip),
@@ -378,7 +446,7 @@ impl Generator {
         );
     }
 
-    pub fn define_math(&mut self) {
+    fn define_math(&mut self) {
         let push = self.push;
         let pop = self.pop;
         let get_two_args = vec![
@@ -507,78 +575,6 @@ impl Generator {
                 Call(push),
             ],
         );
-    }
-
-    pub fn define_constant_word(&mut self, name: &str, value: i32) {
-        let docon = self.docon;
-        self.define_word(name, docon, &value.to_le_bytes());
-    }
-
-    pub fn define_variable_word(&mut self, name: &str, initial_value: i32) {
-        let dovar = self.dovar;
-        self.define_word(name, dovar, &initial_value.to_le_bytes());
-    }
-
-    pub fn define_colon_word(&mut self, name: &str, values: Vec<ColonValue>) {
-        let docol = self.docol;
-        let lit_xt = self.get_execution_token("LIT");
-        let branch_xt = self.get_execution_token("BRANCH");
-        let q_branch_xt = self.get_execution_token("?BRANCH");
-        let mut bytes = vec![];
-        for value in values {
-            match value {
-                ColonValue::XT(name) => {
-                    let xt = self.get_execution_token(name);
-                    bytes.extend_from_slice(&xt.to_le_bytes())
-                }
-                ColonValue::Lit(value) => {
-                    bytes.extend_from_slice(&lit_xt.to_le_bytes());
-                    bytes.extend_from_slice(&value.to_le_bytes());
-                }
-                ColonValue::Branch(offset) => {
-                    bytes.extend_from_slice(&branch_xt.to_le_bytes());
-                    bytes.extend_from_slice(&offset.to_le_bytes());
-                }
-                ColonValue::QBranch(offset) => {
-                    bytes.extend_from_slice(&q_branch_xt.to_le_bytes());
-                    bytes.extend_from_slice(&offset.to_le_bytes());
-                }
-            }
-        }
-        let exit_xt = self.get_execution_token(";");
-        bytes.extend_from_slice(&exit_xt.to_le_bytes());
-
-        self.define_word(name, docol, &bytes);
-    }
-
-    pub fn finalize(mut self) -> Self {
-        // Now that we're done adding things to the dictionary,
-        // define CP (a var containing the next address in the dictionary)
-        // Remember that CP takes up space in the dictionary too!
-        let cp = self.cp
-            + 1 // the byte containing this dictionary entry's length
-            + "CP".len() as i32 // the word name
-            + 4 // the variable's XT
-            + 4; // the variable's storage space
-        self.define_variable_word("CP", cp);
-        self.cp = cp;
-
-        // For testing, export every word as a function-which-EXECUTEs-that-word
-        let execute = self.execute;
-        for (word, xt) in self.execution_tokens.clone() {
-            let func = self.compiler.add_func(
-                vec![],
-                vec![],
-                vec![],
-                vec![I32Const(xt), Call(execute), End],
-            );
-            self.compiler.add_export(&word, |e| e.func(func));
-        }
-        self
-    }
-
-    pub fn compile(self) -> Result<Vec<u8>> {
-        self.compiler.compile()
     }
 
     fn define_native_word(&mut self, name: &str, locals: usize, instructions: Vec<Instruction>) {
