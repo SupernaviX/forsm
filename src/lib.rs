@@ -75,7 +75,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{build, build_parser, execute, next_token, pop, push};
+    use super::{build, build_parser, execute, generator::ColonValue::*, next_token, pop, push};
 
     #[test]
     fn should_parse_string() {
@@ -126,9 +126,7 @@ mod tests {
     #[test]
     fn should_support_colon_words() {
         let instance = build(|gen| {
-            gen.define_constant_word("TWO", 2);
-            gen.define_constant_word("THREE", 3);
-            gen.define_colon_word("TEST", vec!["TWO", "THREE", "+"]);
+            gen.define_colon_word("TEST", vec![Lit(2), Lit(3), XT("+")]);
         })
         .unwrap();
         execute(&instance, "TEST").unwrap();
@@ -138,9 +136,11 @@ mod tests {
     #[test]
     fn should_support_variables() {
         let instance = build(|gen| {
-            gen.define_constant_word("ONE", 1);
             gen.define_variable_word("TESTVAR", 0);
-            gen.define_colon_word("TEST", vec!["ONE", "TESTVAR", "!", "TESTVAR", "@"]);
+            gen.define_colon_word(
+                "TEST",
+                vec![Lit(1), XT("TESTVAR"), XT("!"), XT("TESTVAR"), XT("@")],
+            );
         })
         .unwrap();
         execute(&instance, "TEST").unwrap();
@@ -169,10 +169,23 @@ mod tests {
     }
 
     #[test]
+    fn should_support_literals() {
+        let instance = build(|gen| {
+            gen.define_colon_word("THREE", vec![Lit(3)]);
+        })
+        .unwrap();
+
+        execute(&instance, "THREE").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 3);
+    }
+
+    #[test]
     fn should_support_stack_manip() {
         let instance = build(|gen| {
-            gen.define_constant_word("THREE", 3);
-            gen.define_colon_word("TEST", vec!["THREE", "DUP", "DUP", "+", "SWAP", "/"]);
+            gen.define_colon_word(
+                "TEST",
+                vec![Lit(3), XT("DUP"), XT("DUP"), XT("+"), XT("SWAP"), XT("/")],
+            );
         })
         .unwrap();
         execute(&instance, "TEST").unwrap();
@@ -182,9 +195,8 @@ mod tests {
     #[test]
     fn should_support_nested_colon_calls() {
         let instance = build(|gen| {
-            gen.define_constant_word("THREE", 3);
-            gen.define_colon_word("SQUARE", vec!["DUP", "*"]);
-            gen.define_colon_word("TEST", vec!["THREE", "SQUARE"]);
+            gen.define_colon_word("SQUARE", vec![XT("DUP"), XT("*")]);
+            gen.define_colon_word("TEST", vec![Lit(3), XT("SQUARE")]);
         })
         .unwrap();
         execute(&instance, "TEST").unwrap();

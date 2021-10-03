@@ -7,6 +7,11 @@ use parity_wasm::elements::{
 };
 use std::collections::HashMap;
 
+pub enum ColonValue {
+    XT(&'static str),
+    Lit(i32),
+}
+
 pub struct Generator {
     compiler: Compiler,
     push: u32,
@@ -228,6 +233,7 @@ impl Generator {
     }
 
     pub fn define_interpreter(&mut self) {
+        let push = self.push;
         let pop = self.pop;
         let push_r = self.push_r;
         let pop_r = self.pop_r;
@@ -294,10 +300,27 @@ impl Generator {
             Call(pop_r),
             SetGlobal(ip),
         ]);
+
         self.docol = docol;
         self.execute = execute;
         self.define_constant_word("DOCOL", docol as i32);
         self.define_native_word("EXECUTE", vec![Call(pop), Call(execute)]);
+        self.define_native_word(
+            "LIT",
+            vec![
+                // The instruction pointer is pointing to LIT's XT inside of a colon definition.
+                // The value after that is a literal; push it.
+                GetGlobal(ip),
+                I32Const(4),
+                I32Add,
+                TeeLocal(0),
+                I32Load(2, 0),
+                Call(push),
+                // also increment IP appropriately
+                GetLocal(0),
+                SetGlobal(ip),
+            ],
+        );
     }
 
     pub fn define_math(&mut self) {
@@ -330,15 +353,26 @@ impl Generator {
         self.define_word(name, dovar, &initial_value.to_le_bytes());
     }
 
-    pub fn define_colon_word(&mut self, name: &str, mut words: Vec<&str>) {
+    pub fn define_colon_word(&mut self, name: &str, values: Vec<ColonValue>) {
         let docol = self.docol;
-        words.push(";");
-        let xts: Vec<u8> = words
-            .iter()
-            .map(|w| self.get_execution_token(w))
-            .flat_map(|xt| xt.to_le_bytes())
-            .collect();
-        self.define_word(name, docol, &xts);
+        let lit_xt = self.get_execution_token("LIT");
+        let mut bytes = vec![];
+        for value in values {
+            match value {
+                ColonValue::XT(name) => {
+                    let xt = self.get_execution_token(name);
+                    bytes.extend_from_slice(&xt.to_le_bytes())
+                }
+                ColonValue::Lit(value) => {
+                    bytes.extend_from_slice(&lit_xt.to_le_bytes());
+                    bytes.extend_from_slice(&value.to_le_bytes());
+                }
+            }
+        }
+        let exit_xt = self.get_execution_token(";");
+        bytes.extend_from_slice(&exit_xt.to_le_bytes());
+
+        self.define_word(name, docol, &bytes);
     }
 
     pub fn finalize(mut self) -> Self {
