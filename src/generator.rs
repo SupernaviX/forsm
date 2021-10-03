@@ -30,98 +30,6 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn define_parse(mut self, value: Vec<u8>) -> Self {
-        let buf_start = 0x100;
-        let buf_end = buf_start + value.len() as i32;
-        self.compiler.add_data(buf_start, value);
-
-        let word_start = self.add_global(buf_start);
-        let buffer_head = self.add_global(buf_start);
-        let buffer_tail = self.add_global(buf_end);
-
-        let params = vec![ValueType::I32];
-        const CHAR: u32 = 0;
-        let results = vec![ValueType::I32, ValueType::I32];
-        #[rustfmt::skip]
-        let instructions = vec![
-            // Ignore leading chars-to-ignore
-            Block(BlockType::NoResult),
-            Loop(BlockType::NoResult),
-                // If we done we done
-                GetGlobal(buffer_head),
-                GetGlobal(buffer_tail),
-                I32Eq,
-                BrIf(1),
-
-                // If we see something besides the delimiter we done
-                GetGlobal(buffer_head),
-                I32Load8U(0, 0),
-                GetLocal(CHAR),
-                I32Ne,
-                BrIf(1),
-
-                // ++i
-                GetGlobal(buffer_head),
-                I32Const(1),
-                I32Add,
-                SetGlobal(buffer_head),
-                Br(0),
-            End,
-            End,
-
-            // This is the start of the word
-            GetGlobal(buffer_head),
-            SetGlobal(word_start),
-
-            // Keep going until we reach the end of the buffer or char-to-ignore
-            Block(BlockType::NoResult),
-            Loop(BlockType::NoResult),
-                // If we done we done
-                GetGlobal(buffer_head),
-                GetGlobal(buffer_tail),
-                I32Eq,
-                BrIf(1),
-
-                // If we see char-to-ignore we done
-                GetGlobal(buffer_head),
-                I32Load8U(0, 0),
-                GetLocal(CHAR),
-                I32Eq,
-                BrIf(1),
-
-                // ++i
-                GetGlobal(buffer_head),
-                I32Const(1),
-                I32Add,
-                SetGlobal(buffer_head),
-                Br(0),
-            End,
-            End,
-
-            // Return start + length
-            GetGlobal(word_start),
-            GetGlobal(buffer_head),
-            GetGlobal(word_start),
-            I32Sub,
-            End
-        ];
-
-        let parse = self
-            .compiler
-            .add_func(params, results, vec![], instructions);
-        self.compiler.add_export("parse", |e| e.func(parse));
-        self
-    }
-
-    pub fn initialize(mut self) -> Self {
-        self.define_stacks();
-        self.define_constants();
-        self.define_variables();
-        self.define_execution();
-        self.define_math();
-        self
-    }
-
     pub fn define_constant_word(&mut self, name: &str, value: i32) {
         let docon = self.docon;
         self.define_word(name, docon, &value.to_le_bytes());
@@ -164,34 +72,17 @@ impl Generator {
         self.define_word(name, docol, &bytes);
     }
 
-    pub fn finalize(mut self) -> Self {
-        // Now that we're done adding things to the dictionary,
-        // define CP (a var containing the next address in the dictionary)
-        // Remember that CP takes up space in the dictionary too!
-        let cp = self.cp
-            + 1 // the byte containing this dictionary entry's length
-            + "CP".len() as i32 // the word name
-            + 4 // the variable's XT
-            + 4; // the variable's storage space
-        self.define_variable_word("CP", cp);
-        self.cp = cp;
-
-        // For testing, export every word as a function-which-EXECUTEs-that-word
-        let execute = self.execute;
-        for (word, xt) in self.execution_tokens.clone() {
-            let func = self.compiler.add_func(
-                vec![],
-                vec![],
-                vec![],
-                vec![I32Const(xt), Call(execute), End],
-            );
-            self.compiler.add_export(&word, |e| e.func(func));
-        }
-        self
+    pub fn compile(self) -> Result<Vec<u8>> {
+        self.finalize().compiler.compile()
     }
 
-    pub fn compile(self) -> Result<Vec<u8>> {
-        self.compiler.compile()
+    fn initialize(mut self) -> Self {
+        self.define_stacks();
+        self.define_constants();
+        self.define_variables();
+        self.define_execution();
+        self.define_math();
+        self
     }
 
     fn define_stacks(&mut self) {
@@ -277,6 +168,17 @@ impl Generator {
                 I32Store(2, 4),
             ],
         );
+        self.define_native_word(
+            "OVER",
+            0,
+            vec![
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                I32Load(2, 0),
+                Call(push),
+            ],
+        );
     }
 
     fn define_constants(&mut self) {
@@ -309,6 +211,21 @@ impl Generator {
         self.define_constant_word("DOVAR", dovar as i32);
         self.define_native_word("!", 0, vec![Call(pop), Call(pop), I32Store(2, 0)]);
         self.define_native_word("@", 0, vec![Call(pop), I32Load(2, 0), Call(push)]);
+        self.define_native_word(
+            "+!",
+            0,
+            vec![
+                Call(pop),
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                Call(pop),
+                I32Add,
+                I32Store(2, 0),
+            ],
+        );
+        self.define_native_word("C!", 0, vec![Call(pop), Call(pop), I32Store8(0, 0)]);
+        self.define_native_word("C@", 0, vec![Call(pop), I32Load8U(0, 0), Call(push)]);
     }
 
     fn define_execution(&mut self) {
@@ -538,8 +455,22 @@ impl Generator {
 
             Call(push),
         ]);
+
         self.define_native_word("AND", 0, binary_i32(I32And));
         self.define_native_word("OR", 0, binary_i32(I32Or));
+        self.define_native_word(
+            "INVERT",
+            0,
+            vec![
+                I32Const(-1),
+                I32Const(0),
+                Call(pop),
+                I32Eqz,
+                Select,
+                Call(push),
+            ],
+        );
+
         self.define_native_word("=", 0, binary_bool(I32Eq));
         self.define_native_word("<>", 0, binary_bool(I32Ne));
         self.define_native_word("<", 0, binary_bool(I32LtS));
@@ -575,6 +506,32 @@ impl Generator {
                 Call(push),
             ],
         );
+    }
+
+    fn finalize(mut self) -> Self {
+        // Now that we're done adding things to the dictionary,
+        // define CP (a var containing the next address in the dictionary)
+        // Remember that CP takes up space in the dictionary too!
+        let cp = self.cp
+            + 1 // the byte containing this dictionary entry's length
+            + "CP".len() as i32 // the word name
+            + 4 // the variable's XT
+            + 4; // the variable's storage space
+        self.define_variable_word("CP", cp);
+        self.cp = cp;
+
+        // For testing, export every word as a function-which-EXECUTEs-that-word
+        let execute = self.execute;
+        for (word, xt) in self.execution_tokens.clone() {
+            let func = self.compiler.add_func(
+                vec![],
+                vec![],
+                vec![],
+                vec![I32Const(xt), Call(execute), End],
+            );
+            self.compiler.add_export(&word, |e| e.func(func));
+        }
+        self
     }
 
     fn define_native_word(&mut self, name: &str, locals: usize, instructions: Vec<Instruction>) {
@@ -645,5 +602,6 @@ impl Default for Generator {
             last_word_address: 0,
             execution_tokens: HashMap::new(),
         }
+        .initialize()
     }
 }

@@ -1,31 +1,42 @@
 mod compiler;
 mod generator;
+mod parser;
+
 use anyhow::{anyhow, Result};
 use generator::Generator;
 use std::{cell::Cell, str};
 use wasmer::{imports, Instance, Module, Store, Value};
 
 pub fn build_parser(input: &str) -> Result<Instance> {
-    let binary = Generator::default().define_parse(input.into()).compile()?;
+    let mut gen = Generator::default();
+    parser::build_parser(&mut gen);
+    let binary = gen.compile()?;
     let instance = instantiate(&binary)?;
+
+    // Write the parser input to the TIB
+    execute(&instance, "TIB")?;
+    execute(&instance, "@")?;
+    let start = pop(&instance)? as usize;
+    let end = start + input.len();
+    let view: &[Cell<u8>] = &instance.exports.get_memory("memory")?.view()[start..end];
+    for (cell, byte) in view.iter().zip(input.as_bytes()) {
+        cell.set(*byte);
+    }
+    // Mark that there's fresh content
+    push(&instance, input.len() as i32)?;
+    execute(&instance, "#TIB")?;
+    execute(&instance, "!")?;
+    push(&instance, 0)?;
+    execute(&instance, ">IN")?;
+    execute(&instance, "!")?;
+
     Ok(instance)
 }
 
 pub fn next_token(instance: &Instance) -> Result<String> {
-    let parse = instance.exports.get_function("parse")?;
-    let result = parse.call(&[Value::I32(' ' as i32)])?;
-    match *result {
-        [Value::I32(start), Value::I32(len)] => {
-            let memory = instance.exports.get_memory("memory")?;
-            let view = memory.view();
-            let start = start as usize;
-            let end = start + len as usize;
-            let result_bytes: Vec<u8> = view[start..end].iter().map(Cell::get).collect();
-            let result = str::from_utf8(&result_bytes)?.to_owned();
-            Ok(result)
-        }
-        _ => Err(anyhow!("Unexpected output {:?}", result)),
-    }
+    push(&instance, ' ' as i32)?;
+    execute(&instance, "PARSE")?;
+    pop_string(&instance)
 }
 
 pub fn push(instance: &Instance, value: i32) -> Result<()> {
@@ -44,6 +55,17 @@ pub fn pop(instance: &Instance) -> Result<i32> {
         [Value::I32(val)] => Ok(val),
         _ => Err(anyhow!("Unexpected output {:?}", result)),
     }
+}
+
+pub fn pop_string(instance: &Instance) -> Result<String> {
+    let len = pop(&instance)? as usize;
+    let start = pop(&instance)? as usize;
+    let end = start + len;
+
+    let memory = instance.exports.get_memory("memory")?;
+    let view = memory.view();
+    let result_bytes: Vec<u8> = view[start..end].iter().map(Cell::get).collect();
+    Ok(str::from_utf8(&result_bytes)?.to_owned())
 }
 
 pub fn execute(instance: &Instance, word: &str) -> Result<()> {
@@ -67,9 +89,9 @@ pub fn build<T>(func: T) -> Result<Instance>
 where
     T: FnOnce(&mut Generator),
 {
-    let mut gen = Generator::default().initialize();
+    let mut gen = Generator::default();
     func(&mut gen);
-    let binary = gen.finalize().compile()?;
+    let binary = gen.compile()?;
     instantiate(&binary)
 }
 
@@ -192,6 +214,20 @@ mod tests {
         .unwrap();
         execute(&instance, "TEST").unwrap();
         assert_eq!(pop(&instance).unwrap(), 1);
+    }
+
+    #[test]
+    fn should_increment_variables() {
+        let instance = build(|gen| {
+            gen.define_variable_word("TESTVAR", 6);
+            gen.define_colon_word(
+                "TEST",
+                vec![Lit(7), XT("TESTVAR"), XT("+!"), XT("TESTVAR"), XT("@")],
+            );
+        })
+        .unwrap();
+        execute(&instance, "TEST").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 13);
     }
 
     #[test]
