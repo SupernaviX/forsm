@@ -10,6 +10,8 @@ use std::collections::HashMap;
 pub enum ColonValue {
     XT(&'static str),
     Lit(i32),
+    Branch(i32),
+    QBranch(i32),
 }
 
 pub struct Generator {
@@ -330,6 +332,50 @@ impl Generator {
                 SetGlobal(ip),
             ],
         );
+        self.define_native_word(
+            "BRANCH",
+            0,
+            vec![
+                // The instruction pointer is pointing to BRANCH's XT inside of a colon definition.
+                // The value after that is a literal; treat it as an offset to add to IP (where 0 is "next instr")
+                GetGlobal(ip),
+                TeeLocal(0),
+                I32Load(2, 4),
+                I32Const(4), // Add 4 to account for the size of the literal
+                I32Add,
+
+                GetLocal(0),
+                I32Add,
+                SetGlobal(ip),
+            ],
+        );
+        self.define_native_word(
+            "?BRANCH",
+            0,
+            vec![
+                // Branch if the head of the stack is "false" (0)
+                Call(pop),
+                I32Eqz,
+
+                If(BlockType::Value(ValueType::I32)),
+                // Offset is based on the literal after the IP (+4 because of the literal's size)
+                GetGlobal(ip),
+                TeeLocal(0),
+                I32Load(2, 4),
+                I32Const(4),
+                I32Add,
+
+                Else, // Offset is just 4
+                GetGlobal(ip),
+                SetLocal(0),
+                I32Const(4),
+                End,
+
+                GetLocal(0),
+                I32Add,
+                SetGlobal(ip),
+            ],
+        );
     }
 
     pub fn define_math(&mut self) {
@@ -424,6 +470,8 @@ impl Generator {
 
             Call(push),
         ]);
+        self.define_native_word("AND", 0, binary_i32(I32And));
+        self.define_native_word("OR", 0, binary_i32(I32Or));
         self.define_native_word("=", 0, binary_bool(I32Eq));
         self.define_native_word("<>", 0, binary_bool(I32Ne));
         self.define_native_word("<", 0, binary_bool(I32LtS));
@@ -474,6 +522,8 @@ impl Generator {
     pub fn define_colon_word(&mut self, name: &str, values: Vec<ColonValue>) {
         let docol = self.docol;
         let lit_xt = self.get_execution_token("LIT");
+        let branch_xt = self.get_execution_token("BRANCH");
+        let q_branch_xt = self.get_execution_token("?BRANCH");
         let mut bytes = vec![];
         for value in values {
             match value {
@@ -484,6 +534,14 @@ impl Generator {
                 ColonValue::Lit(value) => {
                     bytes.extend_from_slice(&lit_xt.to_le_bytes());
                     bytes.extend_from_slice(&value.to_le_bytes());
+                }
+                ColonValue::Branch(offset) => {
+                    bytes.extend_from_slice(&branch_xt.to_le_bytes());
+                    bytes.extend_from_slice(&offset.to_le_bytes());
+                }
+                ColonValue::QBranch(offset) => {
+                    bytes.extend_from_slice(&q_branch_xt.to_le_bytes());
+                    bytes.extend_from_slice(&offset.to_le_bytes());
                 }
             }
         }

@@ -249,4 +249,26 @@ mod tests {
         execute(&instance, "TEST").unwrap();
         assert_eq!(pop(&instance).unwrap(), 9);
     }
+
+    #[test]
+    fn should_support_branching() {
+        let instance = build(|gen| {
+            #[rustfmt::skip]
+            gen.define_colon_word("UPCHAR", vec![
+                XT("DUP"), XT("DUP"),
+                Lit(97), XT(">="), XT("SWAP"), Lit(122), XT("<="), XT("AND"),
+                QBranch(12), // Lit(32) is 8 bytes, XT("-") is 4
+                Lit(32), XT("-"),
+            ]);
+        })
+        .unwrap();
+
+        push(&instance, 'a' as i32).unwrap();
+        execute(&instance, "UPCHAR").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 'A' as i32);
+
+        push(&instance, 'B' as i32).unwrap();
+        execute(&instance, "UPCHAR").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 'B' as i32);
+    }
 }
