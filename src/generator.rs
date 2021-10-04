@@ -66,7 +66,7 @@ impl Generator {
                 }
             }
         }
-        let exit_xt = self.get_execution_token(";");
+        let exit_xt = self.get_execution_token("EXIT");
         bytes.extend_from_slice(&exit_xt.to_le_bytes());
 
         self.define_word(name, docol, &bytes);
@@ -82,6 +82,11 @@ impl Generator {
         self.define_variables();
         self.define_execution();
         self.define_math();
+
+        // Define CP and LAST-WORD variables now
+        // We don't have their real values yet, but other code needs to reference them
+        self.define_variable_word("CP", 0);
+        self.define_variable_word("LAST-WORD", 0);
         self
     }
 
@@ -179,6 +184,31 @@ impl Generator {
                 Call(push),
             ],
         );
+        self.define_native_word(
+            "ROT",
+            0,
+            vec![
+                // spin your elements round and round
+                GetGlobal(stack),
+                I32Const(8),
+                I32Sub,
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 4),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 8),
+                I32Store(2, 4),
+                I32Store(2, 0),
+                I32Store(2, 8),
+            ],
+        );
+        self.define_native_word(">R", 0, vec![Call(pop), Call(push_r)]);
+        self.define_native_word("R>", 0, vec![Call(pop_r), Call(push)]);
+        self.define_native_word("R@", 0, vec![GetGlobal(r_stack), I32Load(2, 0), Call(push)]);
     }
 
     fn define_constants(&mut self) {
@@ -236,8 +266,8 @@ impl Generator {
 
         // Define ; as a variable, so we can use its address as a symbol inside colon definitions.
         // Interpretation semantics are undefined, so this is totally valid!
-        self.define_variable_word(";", 0);
-        let exit_xt = self.get_execution_token(";");
+        self.define_variable_word("EXIT", 0);
+        let exit_xt = self.get_execution_token("EXIT");
 
         let ip = self.add_global(exit_xt);
         let execute = self.compiler.add_func(
@@ -456,8 +486,42 @@ impl Generator {
             Call(push),
         ]);
 
+        self.define_native_word(
+            "MIN",
+            1,
+            vec![
+                Call(pop),
+                TeeLocal(0),
+                Call(pop),
+                TeeLocal(1),
+                GetLocal(0),
+                GetLocal(1),
+                I32LtS,
+                Select,
+                Call(push),
+            ],
+        );
+        self.define_native_word(
+            "MAX",
+            1,
+            vec![
+                Call(pop),
+                TeeLocal(0),
+                Call(pop),
+                TeeLocal(1),
+                GetLocal(0),
+                GetLocal(1),
+                I32GtS,
+                Select,
+                Call(push),
+            ],
+        );
+
         self.define_native_word("AND", 0, binary_i32(I32And));
         self.define_native_word("OR", 0, binary_i32(I32Or));
+
+        self.define_constant_word("FALSE", 0);
+        self.define_constant_word("TRUE", -1);
         self.define_native_word(
             "INVERT",
             0,
@@ -510,15 +574,22 @@ impl Generator {
 
     fn finalize(mut self) -> Self {
         // Now that we're done adding things to the dictionary,
-        // define CP (a var containing the next address in the dictionary)
-        // Remember that CP takes up space in the dictionary too!
-        let cp = self.cp
-            + 1 // the byte containing this dictionary entry's length
-            + "CP".len() as i32 // the word name
-            + 4 // the variable's XT
-            + 4; // the variable's storage space
-        self.define_variable_word("CP", cp);
-        self.cp = cp;
+        // set values for CP (a var containing the next address in the dictionary)
+        // and LAST-WORD (a var containing the address of the final word).
+
+        let cp_storage_address = self.get_execution_token("CP") + 4;
+        let cp_bytes: Vec<u8> = self.cp.to_le_bytes().iter().copied().collect();
+        self.compiler.add_data(cp_storage_address, cp_bytes);
+
+        let last_word_storage_address = self.get_execution_token("LAST-WORD") + 4;
+        let last_word_bytes = self
+            .last_word_address
+            .to_le_bytes()
+            .iter()
+            .copied()
+            .collect();
+        self.compiler
+            .add_data(last_word_storage_address, last_word_bytes);
 
         // For testing, export every word as a function-which-EXECUTEs-that-word
         let execute = self.execute;

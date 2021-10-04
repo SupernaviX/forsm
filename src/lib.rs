@@ -1,6 +1,6 @@
 mod compiler;
 mod generator;
-mod parser;
+mod interpreter;
 
 use anyhow::{anyhow, Result};
 use generator::Generator;
@@ -9,19 +9,16 @@ use wasmer::{imports, Instance, Module, Store, Value};
 
 pub fn build_parser(input: &str) -> Result<Instance> {
     let mut gen = Generator::default();
-    parser::build_parser(&mut gen);
+    interpreter::build(&mut gen);
     let binary = gen.compile()?;
     let instance = instantiate(&binary)?;
 
     // Write the parser input to the TIB
     execute(&instance, "TIB")?;
     execute(&instance, "@")?;
-    let start = pop(&instance)? as usize;
-    let end = start + input.len();
-    let view: &[Cell<u8>] = &instance.exports.get_memory("memory")?.view()[start..end];
-    for (cell, byte) in view.iter().zip(input.as_bytes()) {
-        cell.set(*byte);
-    }
+    let start = pop(&instance)?;
+    set_string(&instance, start, input)?;
+
     // Mark that there's fresh content
     push(&instance, input.len() as i32)?;
     execute(&instance, "#TIB")?;
@@ -34,9 +31,11 @@ pub fn build_parser(input: &str) -> Result<Instance> {
 }
 
 pub fn next_token(instance: &Instance) -> Result<String> {
-    push(&instance, ' ' as i32)?;
-    execute(&instance, "PARSE")?;
-    pop_string(&instance)
+    push(instance, ' ' as i32)?;
+    execute(instance, "PARSE-NAME")?;
+    let len = pop(instance)?;
+    let start = pop(instance)?;
+    get_string(instance, start, len)
 }
 
 pub fn push(instance: &Instance, value: i32) -> Result<()> {
@@ -57,15 +56,24 @@ pub fn pop(instance: &Instance) -> Result<i32> {
     }
 }
 
-pub fn pop_string(instance: &Instance) -> Result<String> {
-    let len = pop(&instance)? as usize;
-    let start = pop(&instance)? as usize;
-    let end = start + len;
+pub fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
+    let start = start as usize;
+    let end = start + len as usize;
 
-    let memory = instance.exports.get_memory("memory")?;
-    let view = memory.view();
-    let result_bytes: Vec<u8> = view[start..end].iter().map(Cell::get).collect();
+    let view = &instance.exports.get_memory("memory")?.view()[start..end];
+    let result_bytes: Vec<u8> = view.iter().map(Cell::get).collect();
     Ok(str::from_utf8(&result_bytes)?.to_owned())
+}
+
+pub fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
+    let start = start as usize;
+    let end = start + string.len();
+
+    let view = &instance.exports.get_memory("memory")?.view()[start..end];
+    for (cell, value) in view.iter().zip(string.as_bytes()) {
+        cell.set(*value);
+    }
+    Ok(())
 }
 
 pub fn execute(instance: &Instance, word: &str) -> Result<()> {
@@ -97,7 +105,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{build, build_parser, execute, generator::ColonValue::*, next_token, pop, push};
+    use super::{
+        build, build_parser, execute, generator::ColonValue::*, next_token, pop, push, set_string,
+    };
 
     #[test]
     fn should_parse_string() {
@@ -108,6 +118,31 @@ mod tests {
         assert_eq!(tok2, "world!");
         let tok3 = next_token(&instance).unwrap();
         assert_eq!(tok3, "");
+    }
+
+    #[test]
+    fn should_handle_string_equality() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+        let addr2 = 0x600;
+        let addr3 = 0x700;
+        set_string(&instance, addr1, "Fred").unwrap();
+        set_string(&instance, addr2, "FRED").unwrap();
+        set_string(&instance, addr3, "George").unwrap();
+
+        push(&instance, addr1).unwrap();
+        push(&instance, 4).unwrap();
+        push(&instance, addr2).unwrap();
+        push(&instance, 4).unwrap();
+        execute(&instance, "STR-UPPER-EQ").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+
+        push(&instance, addr1).unwrap();
+        push(&instance, 4).unwrap();
+        push(&instance, addr3).unwrap();
+        push(&instance, 6).unwrap();
+        execute(&instance, "STR-UPPER-EQ").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 0);
     }
 
     #[test]
@@ -248,6 +283,19 @@ mod tests {
         push(&instance, 2).unwrap();
         execute(&instance, "SWAP").unwrap();
         assert_eq!(pop(&instance).unwrap(), 1);
+        assert_eq!(pop(&instance).unwrap(), 2);
+    }
+
+    #[test]
+    fn should_rot() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 1).unwrap();
+        push(&instance, 2).unwrap();
+        push(&instance, 3).unwrap();
+        execute(&instance, "ROT").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 1);
+        assert_eq!(pop(&instance).unwrap(), 3);
         assert_eq!(pop(&instance).unwrap(), 2);
     }
 
