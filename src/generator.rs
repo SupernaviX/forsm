@@ -517,6 +517,9 @@ impl Generator {
             ],
         );
 
+        self.define_native_word("1+", 0, vec![Call(pop), I32Const(1), I32Add, Call(push)]);
+        self.define_native_word("1-", 0, vec![Call(pop), I32Const(1), I32Sub, Call(push)]);
+
         self.define_native_word("AND", 0, binary_i32(I32And));
         self.define_native_word("OR", 0, binary_i32(I32Or));
 

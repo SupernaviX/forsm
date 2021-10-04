@@ -73,27 +73,27 @@ fn build_interpreter(gen: &mut Generator) {
         "STR-UPPER-EQ",
         vec![
             XT("ROT"), XT("SWAP"), // ( c-addr1 c-addr2 u1 u2 )
-            XT("OVER"), XT("<>"), QBranch(24), // If lengths mismatch, return now
-            XT("DROP"), XT("DROP"), XT("DROP"), Lit(0), XT("EXIT"),
+            XT("OVER"), XT("<>"), QBranch(20), // If lengths mismatch, return now
+            XT("DROP"), XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
             // then
 
             // stack is now ( c-addr1 c-addr2 u )
             // start of loop
-            XT("DUP"), XT(">0"), QBranch(128), // if length is 0, break outta the loop
+            XT("DUP"), XT(">0"), QBranch(100), // if length is 0, break outta the loop
 
             XT(">R"), // push length into return stack
             XT("OVER"), XT("C@"), XT("UPCHAR"), XT("OVER"), XT("C@"), XT("<>"), // are chars not-equal?
-            QBranch(36), // if
+            QBranch(32), // if
             XT("R>"), XT("DROP"), XT("DROP"), XT("DROP"), //fix the stacks
-            Lit(0), XT("EXIT"), // return false
-            Branch(48), // else
-            XT("SWAP"), Lit(1), XT("+"), XT("SWAP"), Lit(1), XT("+"), // increment pointers
-            XT("R>"), Lit(1),  XT("-"), // get the count out of the return stack and decremented
+            XT("FALSE"), XT("EXIT"), // return false
+            Branch(24), // else
+            XT("SWAP"), XT("1+"), XT("SWAP"), XT("1+"), // increment pointers
+            XT("R>"), XT("1-"), // get the count out of the return stack and decremented
             // then
 
-            Branch(-144), // end of loop
+            Branch(-116), // end of loop
 
-            XT("DROP"), XT("DROP"), XT("DROP"), Lit(-1), // if we made it this far we win!
+            XT("DROP"), XT("DROP"), XT("DROP"), XT("TRUE"), // if we made it this far we win!
         ],
     );
 }
