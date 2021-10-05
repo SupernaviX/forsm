@@ -96,4 +96,54 @@ fn build_interpreter(gen: &mut Generator) {
             XT("DROP"), XT("DROP"), XT("DROP"), XT("TRUE"), // if we made it this far we win!
         ],
     );
+
+    // Given a name token, get its length ( nt -- u )
+    gen.define_colon_word("NAME>U", vec![XT("C@"), Lit(31), XT("AND")]);
+
+    // Given a name token, get the name ( nt -- c-addr u )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "NAME>STRING",
+        vec![
+            XT("DUP"), XT("1+"), // start of the name is 1 byte after the head
+            XT("SWAP"), XT("NAME>U"),
+        ],
+    );
+
+    // given a name token, get the name token before it ( nt -- nt | 0 )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "NAME>BACKWORD",
+        vec![
+            XT("DUP"), XT("NAME>U"), // get word length
+            XT("1+"), XT("+"), // backword is 1 + len bytes into the def
+            XT("@"),
+        ],
+    );
+
+    // Find the address of some word ( c-addr u -- nt | 0 )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "FIND-NAME",
+        vec![
+            XT("LAST-WORD"), XT("@"), // start at the end of the dictionary
+
+            // start of loop
+            XT("DUP"), XT("=0"), // if we've found null
+            QBranch(20), // give up
+            XT("DROP"), XT("DROP"), XT("DROP"), // flush the stack
+            XT("FALSE"), XT("EXIT"), // and exit with haste and falseness
+
+            XT(">R"), XT("OVER"), XT("OVER"), // set up copies of c-addr and u
+            XT("R@"), XT("NAME>STRING"), // and extract the name from the nt
+            XT("STR-UPPER-EQ"),// Are they equal?
+
+            QBranch(24), // this IS it chief!
+            XT("DROP"), XT("DROP"), // get rid of c-addr and u
+            XT("R>"), XT("EXIT"), // return the address of the word
+            Branch(8), // this ain't it chief
+            XT("R>"), XT("NAME>BACKWORD"), // go to the previous def
+            Branch(-108), // end of loop
+        ],
+    );
 }

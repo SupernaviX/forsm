@@ -106,7 +106,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        build, build_parser, execute, generator::ColonValue::*, next_token, pop, push, set_string,
+        build, build_parser, execute, generator::ColonValue::*, get_string, next_token, pop, push,
+        set_string,
     };
 
     #[test]
@@ -143,6 +144,35 @@ mod tests {
         push(&instance, 6).unwrap();
         execute(&instance, "STR-UPPER-EQ").unwrap();
         assert_eq!(pop(&instance).unwrap(), 0);
+    }
+
+    #[test]
+    fn should_find_words() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+        let addr2 = 0x600;
+
+        set_string(&instance, addr1, "dup").unwrap();
+        set_string(&instance, addr2, "DOOP").unwrap();
+
+        push(&instance, addr1).unwrap();
+        push(&instance, 3).unwrap();
+        execute(&instance, "FIND-NAME").unwrap();
+        let dup_nt = pop(&instance).unwrap();
+        assert_ne!(dup_nt, 0);
+
+        push(&instance, dup_nt).unwrap();
+        execute(&instance, "NAME>STRING").unwrap();
+        let dup_len = pop(&instance).unwrap();
+        let dup_start = pop(&instance).unwrap();
+        let dup_str = get_string(&instance, dup_start, dup_len).unwrap();
+        assert_eq!(dup_str, "DUP");
+
+        push(&instance, addr2).unwrap();
+        push(&instance, 4).unwrap();
+        execute(&instance, "FIND-NAME").unwrap();
+        let doop_nt = pop(&instance).unwrap();
+        assert_eq!(doop_nt, 0);
     }
 
     #[test]
