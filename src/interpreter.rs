@@ -142,6 +142,11 @@ fn build_parser(gen: &mut Generator) {
 }
 
 fn build_interpreter(gen: &mut Generator) {
+    // for now, store errors in here
+    gen.define_variable_word("ERROR", 0);
+    gen.define_colon_word("ERROR!", vec![XT("ERROR"), XT("!")]);
+    gen.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
+
     // Case-insensitive string equality against a known-capital string
     // ( c-addr1 u1 C-ADDR U2 -- ? )
     #[rustfmt::skip]
@@ -155,7 +160,7 @@ fn build_interpreter(gen: &mut Generator) {
 
             // stack is now ( c-addr1 c-addr2 u )
             // start of loop
-            XT("DUP"), XT(">0"), QBranch(100), // if length is 0, break outta the loop
+            XT("DUP"), XT("<>0"), QBranch(100), // if length is 0, break outta the loop
 
             XT(">R"), // push length into return stack
             XT("OVER"), XT("C@"), XT("UPCHAR"), XT("OVER"), XT("C@"), XT("<>"), // are chars not-equal?
@@ -197,6 +202,18 @@ fn build_interpreter(gen: &mut Generator) {
         ],
     );
 
+    // given a name token, get the interpret semantics ( nt -- xt | 0 )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "NAME>INTERPRET",
+        vec![
+            XT("DUP"), XT("C@"), Lit(128), XT("AND"), XT("<>0"), // is this an immediate word?
+            QBranch(16), XT("DROP"), XT("FALSE"), // if so, it doesn't have interpret semantics
+            Branch(24), // else, find em
+            XT("DUP"), XT("NAME>U"), XT("+"), Lit(5), XT("+"), // xt is 1 + len + 4 bytes in
+        ],
+    );
+
     // Find the address of some word ( c-addr u -- nt | 0 )
     #[rustfmt::skip]
     gen.define_colon_word(
@@ -220,6 +237,41 @@ fn build_interpreter(gen: &mut Generator) {
             Branch(8), // this ain't it chief
             XT("R>"), XT("NAME>BACKWORD"), // go to the previous def
             Branch(-108), // end of loop
+        ],
+    );
+
+    // execute words in a loop until the input buffer empties ( -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "INTERPRET",
+        vec![
+            // start of loop
+            Lit(32), XT("PARSE-NAME"), // parse a space-delimited word from the TIB 
+
+            XT("DUP"), XT("=0"),
+            QBranch(12), // if the word is 0-length, we're done!
+            XT("DROP"), XT("DROP"), XT("EXIT"),
+
+            XT("OVER"), XT("OVER"), XT("FIND-NAME"), // look it up in the dictionary
+            XT("DUP"), XT("<>0"),
+
+            QBranch(68), // if we found the word in the dictionary,
+            XT("NIP"), XT("NIP"), // clean the name out of the stack, we're done with it
+            XT("NAME>INTERPRET"), // get the interpret semantics
+            XT("DUP"), XT("=0"),
+            QBranch(28), // if the word has no interpret semantics, error and exit
+            Lit(-1), XT("ERROR!"), XT("DROP"), XT("EXIT"),
+            Branch(4), // else, run it!
+            XT("EXECUTE"),
+
+            Branch(32),// if we did not find the word,
+            XT("DROP"), // clean stack of "xt"
+            XT("?NUMBER"), // maybe it's a number?
+            XT("=0"), // if so, leave the value on the stack 
+            QBranch(16), // if not, error and exit
+            Lit(-2), XT("ERROR!"), XT("EXIT"),
+
+            Branch(-180), // end of loop
         ],
     );
 }

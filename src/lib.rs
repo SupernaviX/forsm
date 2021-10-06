@@ -7,12 +7,11 @@ use generator::Generator;
 use std::{cell::Cell, str};
 use wasmer::{imports, Instance, Module, Store, Value};
 
-pub fn build_parser(input: &str) -> Result<Instance> {
-    let mut gen = Generator::default();
-    interpreter::build(&mut gen);
-    let binary = gen.compile()?;
-    let instance = instantiate(&binary)?;
+pub fn build_interpreter() -> Result<Instance> {
+    build(interpreter::build)
+}
 
+pub fn load_input(instance: &Instance, input: &str) -> Result<()> {
     // Write the parser input to the TIB
     execute(&instance, "TIB")?;
     execute(&instance, "@")?;
@@ -27,15 +26,7 @@ pub fn build_parser(input: &str) -> Result<Instance> {
     execute(&instance, ">IN")?;
     execute(&instance, "!")?;
 
-    Ok(instance)
-}
-
-pub fn next_token(instance: &Instance) -> Result<String> {
-    push(instance, ' ' as i32)?;
-    execute(instance, "PARSE-NAME")?;
-    let len = pop(instance)?;
-    let start = pop(instance)?;
-    get_string(instance, start, len)
+    Ok(())
 }
 
 pub fn push(instance: &Instance, value: i32) -> Result<()> {
@@ -63,7 +54,7 @@ pub fn push_string(instance: &Instance, start: i32, string: &str) -> Result<()> 
     Ok(())
 }
 
-pub fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
+fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
     let start = start as usize;
     let end = start + string.len();
 
@@ -80,7 +71,7 @@ pub fn pop_string(instance: &Instance) -> Result<String> {
     get_string(instance, start, len)
 }
 
-pub fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
+fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
     let start = start as usize;
     let end = start + len as usize;
 
@@ -119,24 +110,31 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        build, build_parser, execute, generator::ColonValue::*, next_token, pop, pop_string, push,
-        push_string,
+        build, build_interpreter, execute, generator::ColonValue::*, load_input, pop, pop_string,
+        push, push_string,
     };
 
     #[test]
     fn should_parse_string() {
-        let instance = build_parser("Hello world!").unwrap();
-        let tok1 = next_token(&instance).unwrap();
-        assert_eq!(tok1, "Hello");
-        let tok2 = next_token(&instance).unwrap();
-        assert_eq!(tok2, "world!");
-        let tok3 = next_token(&instance).unwrap();
-        assert_eq!(tok3, "");
+        let instance = build_interpreter().unwrap();
+        load_input(&instance, "Hello world!").unwrap();
+
+        push(&instance, ' ' as i32).unwrap();
+        execute(&instance, "PARSE-NAME").unwrap();
+        assert_eq!(pop_string(&instance).unwrap(), "Hello");
+
+        push(&instance, ' ' as i32).unwrap();
+        execute(&instance, "PARSE-NAME").unwrap();
+        assert_eq!(pop_string(&instance).unwrap(), "world!");
+
+        push(&instance, ' ' as i32).unwrap();
+        execute(&instance, "PARSE-NAME").unwrap();
+        assert_eq!(pop_string(&instance).unwrap(), "");
     }
 
     #[test]
     fn should_handle_string_equality() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
         let addr2 = 0x600;
 
@@ -153,7 +151,7 @@ mod tests {
 
     #[test]
     fn should_find_words() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
 
         push_string(&instance, addr1, "dup").unwrap();
@@ -174,7 +172,7 @@ mod tests {
 
     #[test]
     fn should_parse_digits() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
 
         push(&instance, '6' as i32).unwrap();
         execute(&instance, "?DIGIT").unwrap();
@@ -201,7 +199,7 @@ mod tests {
 
     #[test]
     fn should_parse_numbers() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
 
         push_string(&instance, addr1, "64").unwrap();
@@ -212,7 +210,7 @@ mod tests {
 
     #[test]
     fn should_parse_negative_numbers() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
 
         push_string(&instance, addr1, "-64").unwrap();
@@ -223,7 +221,7 @@ mod tests {
 
     #[test]
     fn should_not_parse_numbers_in_wrong_base() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
 
         push_string(&instance, addr1, "f0").unwrap();
@@ -233,7 +231,7 @@ mod tests {
 
     #[test]
     fn should_parse_hex_literals() {
-        let instance = build_parser("Hello world!").unwrap();
+        let instance = build_interpreter().unwrap();
         let addr1 = 0x500;
 
         push(&instance, 16).unwrap();
@@ -243,6 +241,20 @@ mod tests {
         execute(&instance, "?NUMBER").unwrap();
         assert_eq!(pop(&instance).unwrap(), -1);
         assert_eq!(pop(&instance).unwrap(), 0xf0);
+    }
+
+    #[test]
+    fn should_interpret() {
+        let instance = build_interpreter().unwrap();
+        load_input(&instance, "2 3 +").unwrap();
+        execute(&instance, "INTERPRET").unwrap();
+
+        // assert no errors
+        execute(&instance, "ERROR@").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 0);
+
+        // assert expected output
+        assert_eq!(pop(&instance).unwrap(), 5);
     }
 
     #[test]
@@ -396,6 +408,30 @@ mod tests {
         execute(&instance, "ROT").unwrap();
         assert_eq!(pop(&instance).unwrap(), 1);
         assert_eq!(pop(&instance).unwrap(), 3);
+        assert_eq!(pop(&instance).unwrap(), 2);
+    }
+
+    #[test]
+    fn should_nip() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 1).unwrap();
+        push(&instance, 2).unwrap();
+        push(&instance, 3).unwrap();
+        execute(&instance, "NIP").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 3);
+        assert_eq!(pop(&instance).unwrap(), 1);
+    }
+
+    #[test]
+    fn should_tuck() {
+        let instance = build(|_| {}).unwrap();
+
+        push(&instance, 1).unwrap();
+        push(&instance, 2).unwrap();
+        execute(&instance, "TUCK").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 2);
+        assert_eq!(pop(&instance).unwrap(), 1);
         assert_eq!(pop(&instance).unwrap(), 2);
     }
 

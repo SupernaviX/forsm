@@ -185,6 +185,49 @@ impl Generator {
             ],
         );
         self.define_native_word(
+            "NIP",
+            0,
+            vec![
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                TeeLocal(0), // point to head - 4
+                GetLocal(0),
+                I32Load(2, 4),  // retrieve value of head
+                I32Store(2, 0), // store in head - 4
+                GetLocal(0),
+                SetGlobal(stack), // head -= 4
+            ],
+        );
+        self.define_native_word(
+            "TUCK",
+            1,
+            vec![
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                TeeLocal(0), // save head - 4
+                I32Load(2, 4),
+                SetLocal(1), // save [head]
+                // start moving
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                I32Store(2, 4), // store [head - 4] in head
+                GetLocal(0),
+                GetLocal(1),
+                I32Store(2, 0), // store old [head] in head - 4
+                GetLocal(0),
+                GetLocal(1),
+                I32Store(2, 8), // store old [head] in head + 4
+                // and just increment the stack ptr and we're done
+                GetLocal(0),
+                I32Const(8),
+                I32Add,
+                SetGlobal(stack),
+            ],
+        );
+        self.define_native_word(
             "ROT",
             0,
             vec![
@@ -548,6 +591,18 @@ impl Generator {
             "=0",
             0,
             vec![I32Const(0), Call(pop), I32Eqz, I32Sub, Call(push)],
+        );
+        self.define_native_word(
+            "<>0",
+            0,
+            vec![
+                I32Const(0),
+                Call(pop),
+                I32Const(0),
+                I32Ne,
+                I32Sub,
+                Call(push),
+            ],
         );
         self.define_native_word(
             "<0",
