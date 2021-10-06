@@ -56,13 +56,11 @@ pub fn pop(instance: &Instance) -> Result<i32> {
     }
 }
 
-pub fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
-    let start = start as usize;
-    let end = start + len as usize;
-
-    let view = &instance.exports.get_memory("memory")?.view()[start..end];
-    let result_bytes: Vec<u8> = view.iter().map(Cell::get).collect();
-    Ok(str::from_utf8(&result_bytes)?.to_owned())
+pub fn push_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
+    set_string(instance, start, string)?;
+    push(instance, start)?;
+    push(instance, string.len() as i32)?;
+    Ok(())
 }
 
 pub fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
@@ -74,6 +72,21 @@ pub fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
         cell.set(*value);
     }
     Ok(())
+}
+
+pub fn pop_string(instance: &Instance) -> Result<String> {
+    let len = pop(instance)?;
+    let start = pop(instance)?;
+    get_string(instance, start, len)
+}
+
+pub fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
+    let start = start as usize;
+    let end = start + len as usize;
+
+    let view = &instance.exports.get_memory("memory")?.view()[start..end];
+    let result_bytes: Vec<u8> = view.iter().map(Cell::get).collect();
+    Ok(str::from_utf8(&result_bytes)?.to_owned())
 }
 
 pub fn execute(instance: &Instance, word: &str) -> Result<()> {
@@ -106,8 +119,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        build, build_parser, execute, generator::ColonValue::*, get_string, next_token, pop, push,
-        set_string,
+        build, build_parser, execute, generator::ColonValue::*, next_token, pop, pop_string, push,
+        push_string,
     };
 
     #[test]
@@ -126,23 +139,15 @@ mod tests {
         let instance = build_parser("Hello world!").unwrap();
         let addr1 = 0x500;
         let addr2 = 0x600;
-        let addr3 = 0x700;
-        set_string(&instance, addr1, "Fred").unwrap();
-        set_string(&instance, addr2, "FRED").unwrap();
-        set_string(&instance, addr3, "George").unwrap();
 
-        push(&instance, addr1).unwrap();
-        push(&instance, 4).unwrap();
-        push(&instance, addr2).unwrap();
-        push(&instance, 4).unwrap();
-        execute(&instance, "STR-UPPER-EQ").unwrap();
+        push_string(&instance, addr1, "Fred").unwrap();
+        push_string(&instance, addr2, "FRED").unwrap();
+        execute(&instance, "STR-UPPER-EQ?").unwrap();
         assert_eq!(pop(&instance).unwrap(), -1);
 
-        push(&instance, addr1).unwrap();
-        push(&instance, 4).unwrap();
-        push(&instance, addr3).unwrap();
-        push(&instance, 6).unwrap();
-        execute(&instance, "STR-UPPER-EQ").unwrap();
+        push_string(&instance, addr1, "Fred").unwrap();
+        push_string(&instance, addr2, "George").unwrap();
+        execute(&instance, "STR-UPPER-EQ?").unwrap();
         assert_eq!(pop(&instance).unwrap(), 0);
     }
 
@@ -150,29 +155,94 @@ mod tests {
     fn should_find_words() {
         let instance = build_parser("Hello world!").unwrap();
         let addr1 = 0x500;
-        let addr2 = 0x600;
 
-        set_string(&instance, addr1, "dup").unwrap();
-        set_string(&instance, addr2, "DOOP").unwrap();
-
-        push(&instance, addr1).unwrap();
-        push(&instance, 3).unwrap();
+        push_string(&instance, addr1, "dup").unwrap();
         execute(&instance, "FIND-NAME").unwrap();
         let dup_nt = pop(&instance).unwrap();
         assert_ne!(dup_nt, 0);
 
         push(&instance, dup_nt).unwrap();
         execute(&instance, "NAME>STRING").unwrap();
-        let dup_len = pop(&instance).unwrap();
-        let dup_start = pop(&instance).unwrap();
-        let dup_str = get_string(&instance, dup_start, dup_len).unwrap();
+        let dup_str = pop_string(&instance).unwrap();
         assert_eq!(dup_str, "DUP");
 
-        push(&instance, addr2).unwrap();
-        push(&instance, 4).unwrap();
+        push_string(&instance, addr1, "DOOP").unwrap();
         execute(&instance, "FIND-NAME").unwrap();
         let doop_nt = pop(&instance).unwrap();
         assert_eq!(doop_nt, 0);
+    }
+
+    #[test]
+    fn should_parse_digits() {
+        let instance = build_parser("Hello world!").unwrap();
+
+        push(&instance, '6' as i32).unwrap();
+        execute(&instance, "?DIGIT").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+        assert_eq!(pop(&instance).unwrap(), 6);
+
+        push(&instance, '4' as i32).unwrap();
+        execute(&instance, "?DIGIT").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+        assert_eq!(pop(&instance).unwrap(), 4);
+
+        push(&instance, 'a' as i32).unwrap();
+        execute(&instance, "?DIGIT").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 0);
+
+        push(&instance, 16).unwrap();
+        execute(&instance, "BASE").unwrap();
+        execute(&instance, "!").unwrap();
+        push(&instance, 'a' as i32).unwrap();
+        execute(&instance, "?DIGIT").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+        assert_eq!(pop(&instance).unwrap(), 10);
+    }
+
+    #[test]
+    fn should_parse_numbers() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+
+        push_string(&instance, addr1, "64").unwrap();
+        execute(&instance, "?NUMBER").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1); // forth true
+        assert_eq!(pop(&instance).unwrap(), 64);
+    }
+
+    #[test]
+    fn should_parse_negative_numbers() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+
+        push_string(&instance, addr1, "-64").unwrap();
+        execute(&instance, "?NUMBER").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1); // forth true
+        assert_eq!(pop(&instance).unwrap(), -64);
+    }
+
+    #[test]
+    fn should_not_parse_numbers_in_wrong_base() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+
+        push_string(&instance, addr1, "f0").unwrap();
+        execute(&instance, "?NUMBER").unwrap();
+        assert_eq!(pop(&instance).unwrap(), 0); // forth false
+    }
+
+    #[test]
+    fn should_parse_hex_literals() {
+        let instance = build_parser("Hello world!").unwrap();
+        let addr1 = 0x500;
+
+        push(&instance, 16).unwrap();
+        execute(&instance, "BASE").unwrap();
+        execute(&instance, "!").unwrap();
+        push_string(&instance, addr1, "f0").unwrap();
+        execute(&instance, "?NUMBER").unwrap();
+        assert_eq!(pop(&instance).unwrap(), -1);
+        assert_eq!(pop(&instance).unwrap(), 0xf0);
     }
 
     #[test]

@@ -51,9 +51,7 @@ fn build_parser(gen: &mut Generator) {
             XT("DUP"), XT("'IN"), XT("SWAP"), XT("-")
         ],
     );
-}
 
-fn build_interpreter(gen: &mut Generator) {
     // Capitalize a character ( c -- C )
     #[rustfmt::skip]
     gen.define_colon_word(
@@ -66,11 +64,89 @@ fn build_interpreter(gen: &mut Generator) {
         ],
     );
 
+    gen.define_variable_word("BASE", 10);
+
+    // try to parse a digit ( c -- n -1 | 0 )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "?DIGIT",
+        vec![
+            XT("UPCHAR"), // parse hex as uppercase
+
+            XT("DUP"), Lit(48), XT(">="),
+            XT("OVER"), Lit(57), XT("<="), XT("AND"),
+            QBranch(20), // if [0-9]
+            Lit(48), XT("-"), // subtract '0'
+
+            Branch(76), // else
+            XT("DUP"), Lit(65), XT(">="),
+            XT("OVER"), Lit(90), XT("<="), XT("AND"),
+            QBranch(12), // if [A-Z]
+            Lit(55), XT("-"), // subtract 'A', add 10
+
+            Branch(12), // else
+            XT("DROP"), XT("FALSE"), XT("EXIT"), // not a digit
+            // end if
+
+            XT("DUP"), XT("BASE"), XT("@"), XT(">="),
+            QBranch(16), // if this isn't a valid digit in the current base
+            XT("DROP"), XT("FALSE"),
+            Branch(4), // else
+            XT("TRUE"),
+        ],
+    );
+
+    // Try parsing a string as a number ( c-addr u -- n -1 | 0 )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "?NUMBER",
+        vec![
+            XT("DUP"), XT("=0"),
+            QBranch(16), // if the string is empty, it's not a number
+            XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
+
+            XT("OVER"), XT("C@"), Lit(45), XT("="), // does it start with -?
+            XT("DUP"), XT(">R"), // store whether it does on the return stack
+            QBranch(16), // if it does, skip past the -
+            XT("1-"), XT("SWAP"), XT("1+"), XT("SWAP"),
+
+            XT("DUP"), XT("=0"),
+            QBranch(16), // if we're out of characters NOW it's also not a number
+            XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
+
+            XT("OVER"), XT("+"), XT(">R"), // store our final str-address in the return stack
+            Lit(0), // store our running summation on the stack
+            XT("SWAP"),
+
+            // start loop ( n c-addr )
+            XT("DUP"), XT("C@"), XT("?DIGIT"), XT("INVERT"),
+            QBranch(32), // if the next char is NOT a digit
+            XT("R>"), XT("R>"), XT("DROP"), XT("DROP"), XT("DROP"), XT("DROP"), // clean the stack
+            XT("FALSE"), XT("EXIT"), // and get outta here
+            // end if
+
+            XT("ROT"), XT("BASE"), XT("@"), XT("*"), XT("+"), XT("SWAP"), // add digit to running total
+            XT("1+"), // increment address
+            XT("DUP"), XT("R@"), XT("="), // if we're out of input,
+            QBranch(-104), // back to start of loop
+
+            XT("DROP"), // we're done with the input string
+            XT("R>"), XT("DROP"), // we're done with the target string
+
+            // negate it if we have to, add TRUE, and we're good
+            XT("R>"), QBranch(16),
+            Lit(0), XT("SWAP"), XT("-"),
+            XT("TRUE")
+        ],
+    );
+}
+
+fn build_interpreter(gen: &mut Generator) {
     // Case-insensitive string equality against a known-capital string
     // ( c-addr1 u1 C-ADDR U2 -- ? )
     #[rustfmt::skip]
     gen.define_colon_word(
-        "STR-UPPER-EQ",
+        "STR-UPPER-EQ?",
         vec![
             XT("ROT"), XT("SWAP"), // ( c-addr1 c-addr2 u1 u2 )
             XT("OVER"), XT("<>"), QBranch(20), // If lengths mismatch, return now
@@ -136,7 +212,7 @@ fn build_interpreter(gen: &mut Generator) {
 
             XT(">R"), XT("OVER"), XT("OVER"), // set up copies of c-addr and u
             XT("R@"), XT("NAME>STRING"), // and extract the name from the nt
-            XT("STR-UPPER-EQ"),// Are they equal?
+            XT("STR-UPPER-EQ?"),// Are they equal?
 
             QBranch(24), // this IS it chief!
             XT("DROP"), XT("DROP"), // get rid of c-addr and u
