@@ -13,18 +13,18 @@ pub fn build_interpreter() -> Result<Instance> {
 
 pub fn load_input(instance: &Instance, input: &str) -> Result<()> {
     // Write the parser input to the TIB
-    execute(&instance, "TIB")?;
-    execute(&instance, "@")?;
-    let start = pop(&instance)?;
-    set_string(&instance, start, input)?;
+    execute(instance, "TIB")?;
+    execute(instance, "@")?;
+    let start = pop(instance)?;
+    set_string(instance, start, input)?;
 
     // Mark that there's fresh content
-    push(&instance, input.len() as i32)?;
-    execute(&instance, "#TIB")?;
-    execute(&instance, "!")?;
-    push(&instance, 0)?;
-    execute(&instance, ">IN")?;
-    execute(&instance, "!")?;
+    push(instance, input.len() as i32)?;
+    execute(instance, "#TIB")?;
+    execute(instance, "!")?;
+    push(instance, 0)?;
+    execute(instance, ">IN")?;
+    execute(instance, "!")?;
 
     Ok(())
 }
