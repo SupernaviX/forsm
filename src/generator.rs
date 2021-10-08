@@ -23,7 +23,8 @@ pub struct Generator {
     docon: u32,
     dovar: u32,
     docol: u32,
-    execute: u32,
+    start: u32,
+    ip: u32,
     cp: i32,
     last_word_address: i32,
     execution_tokens: HashMap<String, i32>,
@@ -307,12 +308,11 @@ impl Generator {
         let push_r = self.push_r;
         let pop_r = self.pop_r;
 
-        // Define ; as a variable, so we can use its address as a symbol inside colon definitions.
-        // Interpretation semantics are undefined, so this is totally valid!
-        self.define_variable_word("EXIT", 0);
-        let exit_xt = self.get_execution_token("EXIT");
+        let ip = self.add_global(0);
+        self.ip = ip;
+        let stopped = self.add_global(0);
 
-        let ip = self.add_global(exit_xt);
+        // "execute" takes an XT as a parameter and runs it
         let execute = self.compiler.add_func(
             vec![ValueType::I32],
             vec![],
@@ -334,49 +334,64 @@ impl Generator {
                 End,
             ],
         );
-
-        #[rustfmt::skip]
-        let docol = self.create_native_callable(0, vec![
-            // push IP onto the return stack
-            GetGlobal(ip),
-            Call(push_r),
-            // Set IP to the head of our parameter
-            GetLocal(0),
-            SetGlobal(ip),
-
-            // Loop until we see EXIT's XT
-            Block(BlockType::NoResult),
-            Loop(BlockType::NoResult),
-            GetGlobal(ip),  // IP is a pointer to an XT
-            I32Load(2, 0),  // Deref it to get our next XT
-            TeeLocal(0),    // Hold onto it for later
-
-            // Is it EXIT? if so we're done
-            I32Const(exit_xt),
-            I32Eq,
-            BrIf(1),
-
-            // Otherwise, execute it
-            GetLocal(0),
-            Call(execute),
-            // and increment the IP
-            GetGlobal(ip),
-            I32Const(4),
-            I32Add,
-            SetGlobal(ip),
-
-            Br(0),
-            End,
-            End,
-            // pop the original IP back in place
-            Call(pop_r),
-            SetGlobal(ip),
-        ]);
-
-        self.docol = docol;
-        self.execute = execute;
-        self.define_constant_word("DOCOL", docol as i32);
         self.define_native_word("EXECUTE", 0, vec![Call(pop), Call(execute)]);
+
+        // Start is the interpreter's main loop, it calls EXECUTE until the program says to pause.
+        // Assuming that the caller has set IP to something reasonable first.
+        let start = self.compiler.add_func(
+            vec![],
+            vec![],
+            vec![],
+            vec![
+                // mark that we should NOT stop yet
+                I32Const(0),
+                SetGlobal(stopped),
+                // loop until execution is not "in progress"
+                Loop(BlockType::NoResult),
+                GetGlobal(ip), // IP is a pointer to an XT
+                I32Load(2, 0), // Deref it to get our next XT
+                Call(execute), // Run it
+                GetGlobal(ip),
+                I32Const(4),
+                I32Add,
+                SetGlobal(ip), // increment the IP
+                // loop if we still have not been stopped
+                GetGlobal(stopped),
+                I32Eqz,
+                BrIf(0),
+                End,
+                End,
+            ],
+        );
+        self.start = start;
+        self.define_native_word("PAUSE", 0, vec![I32Const(-1), SetGlobal(stopped)]);
+
+        // DOCOL is how a colon word is executed. It just messes with the IP.
+        let docol = self.create_native_callable(
+            0,
+            vec![
+                // push IP onto the return stack
+                GetGlobal(ip),
+                Call(push_r),
+                // Set IP to the head of our parameter
+                GetLocal(0),
+                I32Const(4),
+                I32Sub,
+                SetGlobal(ip),
+            ],
+        );
+        self.docol = docol;
+        self.define_constant_word("DOCOL", docol as i32);
+        // EXIT is how a colon word returns. It just restores the old IP.
+        self.define_native_word(
+            "EXIT",
+            0,
+            vec![
+                // Set IP to whatever's the head of the return stack
+                Call(pop_r),
+                SetGlobal(ip),
+            ],
+        );
         self.define_native_word(
             "LIT",
             0,
@@ -631,6 +646,12 @@ impl Generator {
     }
 
     fn finalize(mut self) -> Self {
+        // For testing purposes, define a word that just calls another word and pauses.
+        self.define_colon_word(
+            "RUN-WORD",
+            vec![ColonValue::XT("EXECUTE"), ColonValue::XT("PAUSE")],
+        );
+
         // Now that we're done adding things to the dictionary,
         // set values for CP (a var containing the next address in the dictionary)
         // and LAST-WORD (a var containing the address of the final word).
@@ -650,13 +671,20 @@ impl Generator {
             .add_data(last_word_storage_address, last_word_bytes);
 
         // For testing, export every word as a function-which-EXECUTEs-that-word
-        let execute = self.execute;
+        let run_xt = self.get_execution_token("RUN-WORD");
         for (word, xt) in self.execution_tokens.clone() {
             let func = self.compiler.add_func(
                 vec![],
                 vec![],
                 vec![],
-                vec![I32Const(xt), Call(execute), End],
+                vec![
+                    I32Const(xt),
+                    Call(self.push), // Add the function to call onto the stack
+                    I32Const(run_xt + 4),
+                    SetGlobal(self.ip), // Set the IP to within the "run this" func
+                    Call(self.start),   // start the main loop
+                    End,
+                ],
             );
             self.compiler.add_export(&word, |e| e.func(func));
         }
@@ -726,7 +754,8 @@ impl Default for Generator {
             docon: 0,
             dovar: 0,
             docol: 0,
-            execute: 0,
+            start: 0,
+            ip: 0,
             cp: 0x1000,
             last_word_address: 0,
             execution_tokens: HashMap::new(),
