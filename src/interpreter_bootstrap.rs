@@ -2,16 +2,64 @@ use super::generator::{ColonValue::*, Generator};
 
 /* Build a very basic INTERPRET word */
 pub fn build(gen: &mut Generator) {
+    build_io(gen);
     build_parser(gen);
     build_interpreter(gen);
 }
 
-fn build_parser(gen: &mut Generator) {
-    let buf_start = 0x100;
-    gen.define_variable_word("TIB", buf_start);
+fn build_io(gen: &mut Generator) {
+    let tib = 0x100;
+    let tob = 0x200;
+    gen.define_variable_word("TIB", tib);
     gen.define_variable_word("#TIB", 0);
     gen.define_variable_word(">IN", 0);
 
+    // make an output buffer to fake output for now
+    gen.define_variable_word("TOB", tob);
+    gen.define_variable_word("#TOB", 0);
+
+    // ( c -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "EMIT",
+        vec![
+            // write to end of TOB
+            XT("TOB"), XT("@"), XT("#TOB"), XT("@"), XT("+"), XT("C!"),
+            // move the end over
+            Lit(1), XT("#TOB"), XT("+!"),
+        ],
+    );
+
+    // below words are just meant to be called by the host
+
+    // set aside N bytes of input buffer
+    // ( u -- c-addr )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "RESERVE-INPUT-BUFFER",
+        vec![
+            // update tib length
+            XT("#TIB"), XT("!"),
+            // return tib head
+            XT("TIB"), XT("@")
+        ],
+    );
+
+    // return the "contents" of the buffer AND reset it
+    // ( -- c-addr u )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "DUMP-OUTPUT-BUFFER",
+        vec![
+            // get c-addr u onto the stack
+            XT("TOB"), XT("@"), XT("#TOB"), XT("@"),
+            // clear the buffer
+            Lit(0), XT("#TOB"), XT("!"),
+        ],
+    );
+}
+
+fn build_parser(gen: &mut Generator) {
     // is there anything to parse( -- ? )
     gen.define_colon_word(
         "PARSING?",

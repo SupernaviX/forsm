@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn should_parse_string() {
         let interpreter = build_interpreter().unwrap();
-        interpreter.load_input("Hello world!").unwrap();
+        interpreter.write_input("Hello world!").unwrap();
 
         interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
@@ -157,15 +157,20 @@ mod tests {
     #[test]
     fn should_evaluate() {
         let interpreter = build_interpreter().unwrap();
-        interpreter.load_input("2 3 +").unwrap();
-        interpreter.execute("EVALUATE").unwrap();
-
-        // assert no errors
-        interpreter.execute("ERROR@").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 0);
+        let output = interpreter.interpret("2 3 +").unwrap();
 
         // assert expected output
+        assert_eq!(output, "");
         assert_eq!(interpreter.pop().unwrap(), 5);
+    }
+
+    #[test]
+    fn should_emit_output() {
+        let interpreter = build_interpreter().unwrap();
+        let output = interpreter
+            .interpret("110 EMIT 105 EMIT 99 EMIT 101 EMIT")
+            .unwrap();
+        assert_eq!(output, "nice");
     }
 
     #[test]

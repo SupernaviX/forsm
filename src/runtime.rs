@@ -16,22 +16,35 @@ impl Runtime {
         Ok(Self { instance })
     }
 
-    pub fn load_input(&self, input: &str) -> Result<()> {
-        // Write the parser input to the TIB
-        self.execute("TIB")?;
-        self.execute("@")?;
+    pub fn interpret(&self, input: &str) -> Result<String> {
+        self.write_input(input)?;
+        self.execute("EVALUATE")?;
+
+        // assert no errors
+        self.execute("ERROR@")?;
+        let error = self.pop()?;
+        if error != 0 {
+            return Err(anyhow!("Interpretation threw {}", error));
+        }
+        self.read_output()
+    }
+
+    pub fn write_input(&self, input: &str) -> Result<()> {
+        // request N bytes of space
+        self.push(input.len() as i32)?;
+        self.execute("RESERVE-INPUT-BUFFER")?;
+        // address to write to is now on the stack
         let start = self.pop()?;
         self.set_string(start, input)?;
 
-        // Mark that there's fresh content
-        self.push(input.len() as i32)?;
-        self.execute("#TIB")?;
-        self.execute("!")?;
-        self.push(0)?;
-        self.execute(">IN")?;
-        self.execute("!")?;
-
         Ok(())
+    }
+
+    pub fn read_output(&self) -> Result<String> {
+        // ask the program to dump output
+        self.execute("DUMP-OUTPUT-BUFFER")?;
+        // and just pop off
+        self.pop_string()
     }
 
     pub fn push(&self, value: i32) -> Result<()> {
