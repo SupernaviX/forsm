@@ -202,16 +202,17 @@ fn build_interpreter(gen: &mut Generator) {
         ],
     );
 
-    // given a name token, get the interpret semantics ( nt -- xt | 0 )
-    #[rustfmt::skip]
+    // given a name token, does that token point to an immedaite word? ( nt -- ? )
     gen.define_colon_word(
-        "NAME>INTERPRET",
-        vec![
-            XT("DUP"), XT("C@"), Lit(128), XT("AND"), XT("<>0"), // is this an immediate word?
-            QBranch(16), XT("DROP"), XT("FALSE"), // if so, it doesn't have interpret semantics
-            Branch(24), // else, find em
-            XT("DUP"), XT("NAME>U"), XT("+"), Lit(5), XT("+"), // xt is 1 + len + 4 bytes in
-        ],
+        "NAME>IMMEDIATE?",
+        vec![XT("C@"), Lit(128), XT("AND"), XT("<>0")],
+    );
+
+    // given a name token, get the execution token ( nt -- xt )
+    // xt is 1 + len + 4 bytes in to the definition
+    gen.define_colon_word(
+        "NAME>XT",
+        vec![XT("DUP"), XT("NAME>U"), XT("+"), Lit(5), XT("+")],
     );
 
     // Find the address of some word ( c-addr u -- nt | 0 )
@@ -240,10 +241,67 @@ fn build_interpreter(gen: &mut Generator) {
         ],
     );
 
+    gen.define_variable_word("STATE", 0);
+    gen.define_colon_word("COMPILING?", vec![XT("STATE"), XT("@")]);
+
+    // append a cell to the end of the dictionary( n -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        ",",
+        vec![
+            XT("CP"), XT("@"), XT("!"), // save value at end of dictionary
+            Lit(4), XT("CP"), XT("+!"), // shift end of dictionary over
+        ],
+    );
+
+    // append a byte to the end of the dictionary( n -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "C,",
+        vec![
+            XT("CP"), XT("@"), XT("C!"), // save value at end of dictionary
+            Lit(1), XT("CP"), XT("+!"), // shift end of dictionary over
+        ],
+    );
+
+    // append a compiled literal to the end of the dictionary ( n -- )
+    gen.define_colon_word(
+        "COMPILE-LITERAL",
+        vec![XT("LIT"), XT("LIT"), XT(","), XT(",")],
+    );
+
+    // Perform interpretation semantics for a word (or return if it errored) ( nt -- ? )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "INTERPRET-NAME",
+        vec![
+            XT("DUP"), XT("NAME>XT"), // get the word's XT
+            XT("SWAP"), XT("NAME>IMMEDIATE?"), // is the word immediate?
+            QBranch(16), // if so,
+            XT("DROP"), XT("TRUE"), // clear the stack, indicate badness
+            Branch(8),  // else,
+            XT("EXECUTE"), XT("FALSE"), // run it and indicate goodness
+        ],
+    );
+
+    // Perform compilation semantics for a word ( nt -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "COMPILE-NAME",
+        vec![
+            XT("DUP"), XT("NAME>XT"), // get the word's XT
+            XT("SWAP"), XT("NAME>IMMEDIATE?"), // is the word immediate?
+            QBranch(12),   // if so,
+            XT("EXECUTE"), // run it right away
+            Branch(4),     // else,
+            XT(","),       // bake it in
+        ],
+    );
+
     // execute words in a loop until the input buffer empties ( -- )
     #[rustfmt::skip]
     gen.define_colon_word(
-        "INTERPRET",
+        "EVALUATE",
         vec![
             // start of loop
             Lit(32), XT("PARSE-NAME"), // parse a space-delimited word from the TIB 
@@ -257,21 +315,25 @@ fn build_interpreter(gen: &mut Generator) {
 
             QBranch(68), // if we found the word in the dictionary,
             XT("NIP"), XT("NIP"), // clean the name out of the stack, we're done with it
-            XT("NAME>INTERPRET"), // get the interpret semantics
-            XT("DUP"), XT("=0"),
-            QBranch(28), // if the word has no interpret semantics, error and exit
-            Lit(-1), XT("ERROR!"), XT("DROP"), XT("EXIT"),
-            Branch(4), // else, run it!
-            XT("EXECUTE"),
+            XT("COMPILING?"),
+            QBranch(12),
+            XT("COMPILE-NAME"),
+            Branch(28),
+            XT("INTERPRET-NAME"),
+            QBranch(16), // if interpretation failed, return early
+            Lit(-1), XT("ERROR!"), XT("EXIT"),
 
-            Branch(32),// if we did not find the word,
+            Branch(56), // if we did not find the word,
             XT("DROP"), // clean stack of "xt"
             XT("?NUMBER"), // maybe it's a number?
-            XT("=0"), // if so, leave the value on the stack 
-            QBranch(16), // if not, error and exit
+            QBranch(24),  // if so, either bake the value in or leave it on the stack
+            XT("COMPILING?"),
+            QBranch(4),
+            XT("COMPILE-LITERAL"),
+            Branch(16), // if not, error and exit
             Lit(-2), XT("ERROR!"), XT("EXIT"),
 
-            Branch(-180), // end of loop
+            Branch(-200), // end of loop
         ],
     );
 }

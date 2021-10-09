@@ -244,10 +244,10 @@ mod tests {
     }
 
     #[test]
-    fn should_interpret() {
+    fn should_evaluate() {
         let instance = build_interpreter().unwrap();
         load_input(&instance, "2 3 +").unwrap();
-        execute(&instance, "INTERPRET").unwrap();
+        execute(&instance, "EVALUATE").unwrap();
 
         // assert no errors
         execute(&instance, "ERROR@").unwrap();
