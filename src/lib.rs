@@ -1,314 +1,225 @@
 mod compiler;
 mod generator;
-mod interpreter;
+mod interpreter_bootstrap;
+mod runtime;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use generator::Generator;
-use std::{cell::Cell, str};
-use wasmer::{imports, Instance, Module, Store, Value};
+use runtime::Runtime;
 
-pub fn build_interpreter() -> Result<Instance> {
-    build(interpreter::build)
+pub fn build_interpreter() -> Result<Runtime> {
+    build(interpreter_bootstrap::build)
 }
 
-pub fn load_input(instance: &Instance, input: &str) -> Result<()> {
-    // Write the parser input to the TIB
-    execute(instance, "TIB")?;
-    execute(instance, "@")?;
-    let start = pop(instance)?;
-    set_string(instance, start, input)?;
-
-    // Mark that there's fresh content
-    push(instance, input.len() as i32)?;
-    execute(instance, "#TIB")?;
-    execute(instance, "!")?;
-    push(instance, 0)?;
-    execute(instance, ">IN")?;
-    execute(instance, "!")?;
-
-    Ok(())
-}
-
-pub fn push(instance: &Instance, value: i32) -> Result<()> {
-    let push = instance.exports.get_function("push")?;
-    let result = push.call(&[Value::I32(value)])?;
-    match *result {
-        [] => Ok(()),
-        _ => Err(anyhow!("Unexpected output {:?}", result)),
-    }
-}
-
-pub fn pop(instance: &Instance) -> Result<i32> {
-    let pop = instance.exports.get_function("pop")?;
-    let result = pop.call(&[])?;
-    match *result {
-        [Value::I32(val)] => Ok(val),
-        _ => Err(anyhow!("Unexpected output {:?}", result)),
-    }
-}
-
-pub fn push_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
-    set_string(instance, start, string)?;
-    push(instance, start)?;
-    push(instance, string.len() as i32)?;
-    Ok(())
-}
-
-fn set_string(instance: &Instance, start: i32, string: &str) -> Result<()> {
-    let start = start as usize;
-    let end = start + string.len();
-
-    let view = &instance.exports.get_memory("memory")?.view()[start..end];
-    for (cell, value) in view.iter().zip(string.as_bytes()) {
-        cell.set(*value);
-    }
-    Ok(())
-}
-
-pub fn pop_string(instance: &Instance) -> Result<String> {
-    let len = pop(instance)?;
-    let start = pop(instance)?;
-    get_string(instance, start, len)
-}
-
-fn get_string(instance: &Instance, start: i32, len: i32) -> Result<String> {
-    let start = start as usize;
-    let end = start + len as usize;
-
-    let view = &instance.exports.get_memory("memory")?.view()[start..end];
-    let result_bytes: Vec<u8> = view.iter().map(Cell::get).collect();
-    Ok(str::from_utf8(&result_bytes)?.to_owned())
-}
-
-pub fn execute(instance: &Instance, word: &str) -> Result<()> {
-    let word = instance.exports.get_function(word)?;
-    let result = word.call(&[])?;
-    match *result {
-        [] => Ok(()),
-        _ => Err(anyhow!("Unexpected output {:?}", result)),
-    }
-}
-
-fn instantiate(binary: &[u8]) -> Result<Instance> {
-    let store = Store::default();
-    let module = Module::from_binary(&store, binary)?;
-    let import_object = imports! {};
-    let instance = Instance::new(&module, &import_object)?;
-    Ok(instance)
-}
-
-pub fn build<T>(func: T) -> Result<Instance>
+pub fn build<T>(func: T) -> Result<Runtime>
 where
     T: FnOnce(&mut Generator),
 {
     let mut gen = Generator::default();
     func(&mut gen);
     let binary = gen.compile()?;
-    instantiate(&binary)
+    Runtime::new(&binary)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build, build_interpreter, execute, generator::ColonValue::*, load_input, pop, pop_string,
-        push, push_string,
-    };
+    use super::{build, build_interpreter, generator::ColonValue::*};
 
     #[test]
     fn should_parse_string() {
-        let instance = build_interpreter().unwrap();
-        load_input(&instance, "Hello world!").unwrap();
+        let interpreter = build_interpreter().unwrap();
+        interpreter.load_input("Hello world!").unwrap();
 
-        push(&instance, ' ' as i32).unwrap();
-        execute(&instance, "PARSE-NAME").unwrap();
-        assert_eq!(pop_string(&instance).unwrap(), "Hello");
+        interpreter.push(' ' as i32).unwrap();
+        interpreter.execute("PARSE-NAME").unwrap();
+        assert_eq!(interpreter.pop_string().unwrap(), "Hello");
 
-        push(&instance, ' ' as i32).unwrap();
-        execute(&instance, "PARSE-NAME").unwrap();
-        assert_eq!(pop_string(&instance).unwrap(), "world!");
+        interpreter.push(' ' as i32).unwrap();
+        interpreter.execute("PARSE-NAME").unwrap();
+        assert_eq!(interpreter.pop_string().unwrap(), "world!");
 
-        push(&instance, ' ' as i32).unwrap();
-        execute(&instance, "PARSE-NAME").unwrap();
-        assert_eq!(pop_string(&instance).unwrap(), "");
+        interpreter.push(' ' as i32).unwrap();
+        interpreter.execute("PARSE-NAME").unwrap();
+        assert_eq!(interpreter.pop_string().unwrap(), "");
     }
 
     #[test]
     fn should_handle_string_equality() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
         let addr2 = 0x600;
 
-        push_string(&instance, addr1, "Fred").unwrap();
-        push_string(&instance, addr2, "FRED").unwrap();
-        execute(&instance, "STR-UPPER-EQ?").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
+        interpreter.push_string(addr1, "Fred").unwrap();
+        interpreter.push_string(addr2, "FRED").unwrap();
+        interpreter.execute("STR-UPPER-EQ?").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
 
-        push_string(&instance, addr1, "Fred").unwrap();
-        push_string(&instance, addr2, "George").unwrap();
-        execute(&instance, "STR-UPPER-EQ?").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 0);
+        interpreter.push_string(addr1, "Fred").unwrap();
+        interpreter.push_string(addr2, "George").unwrap();
+        interpreter.execute("STR-UPPER-EQ?").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 0);
     }
 
     #[test]
     fn should_find_words() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
 
-        push_string(&instance, addr1, "dup").unwrap();
-        execute(&instance, "FIND-NAME").unwrap();
-        let dup_nt = pop(&instance).unwrap();
+        interpreter.push_string(addr1, "dup").unwrap();
+        interpreter.execute("FIND-NAME").unwrap();
+        let dup_nt = interpreter.pop().unwrap();
         assert_ne!(dup_nt, 0);
 
-        push(&instance, dup_nt).unwrap();
-        execute(&instance, "NAME>STRING").unwrap();
-        let dup_str = pop_string(&instance).unwrap();
+        interpreter.push(dup_nt).unwrap();
+        interpreter.execute("NAME>STRING").unwrap();
+        let dup_str = interpreter.pop_string().unwrap();
         assert_eq!(dup_str, "DUP");
 
-        push_string(&instance, addr1, "DOOP").unwrap();
-        execute(&instance, "FIND-NAME").unwrap();
-        let doop_nt = pop(&instance).unwrap();
+        interpreter.push_string(addr1, "DOOP").unwrap();
+        interpreter.execute("FIND-NAME").unwrap();
+        let doop_nt = interpreter.pop().unwrap();
         assert_eq!(doop_nt, 0);
     }
 
     #[test]
     fn should_parse_digits() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
 
-        push(&instance, '6' as i32).unwrap();
-        execute(&instance, "?DIGIT").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
-        assert_eq!(pop(&instance).unwrap(), 6);
+        interpreter.push('6' as i32).unwrap();
+        interpreter.execute("?DIGIT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
+        assert_eq!(interpreter.pop().unwrap(), 6);
 
-        push(&instance, '4' as i32).unwrap();
-        execute(&instance, "?DIGIT").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
-        assert_eq!(pop(&instance).unwrap(), 4);
+        interpreter.push('4' as i32).unwrap();
+        interpreter.execute("?DIGIT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
+        assert_eq!(interpreter.pop().unwrap(), 4);
 
-        push(&instance, 'a' as i32).unwrap();
-        execute(&instance, "?DIGIT").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 0);
+        interpreter.push('a' as i32).unwrap();
+        interpreter.execute("?DIGIT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 0);
 
-        push(&instance, 16).unwrap();
-        execute(&instance, "BASE").unwrap();
-        execute(&instance, "!").unwrap();
-        push(&instance, 'a' as i32).unwrap();
-        execute(&instance, "?DIGIT").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
-        assert_eq!(pop(&instance).unwrap(), 10);
+        interpreter.push(16).unwrap();
+        interpreter.execute("BASE").unwrap();
+        interpreter.execute("!").unwrap();
+        interpreter.push('a' as i32).unwrap();
+        interpreter.execute("?DIGIT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
+        assert_eq!(interpreter.pop().unwrap(), 10);
     }
 
     #[test]
     fn should_parse_numbers() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
 
-        push_string(&instance, addr1, "64").unwrap();
-        execute(&instance, "?NUMBER").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1); // forth true
-        assert_eq!(pop(&instance).unwrap(), 64);
+        interpreter.push_string(addr1, "64").unwrap();
+        interpreter.execute("?NUMBER").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1); // forth true
+        assert_eq!(interpreter.pop().unwrap(), 64);
     }
 
     #[test]
     fn should_parse_negative_numbers() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
 
-        push_string(&instance, addr1, "-64").unwrap();
-        execute(&instance, "?NUMBER").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1); // forth true
-        assert_eq!(pop(&instance).unwrap(), -64);
+        interpreter.push_string(addr1, "-64").unwrap();
+        interpreter.execute("?NUMBER").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1); // forth true
+        assert_eq!(interpreter.pop().unwrap(), -64);
     }
 
     #[test]
     fn should_not_parse_numbers_in_wrong_base() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
 
-        push_string(&instance, addr1, "f0").unwrap();
-        execute(&instance, "?NUMBER").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 0); // forth false
+        interpreter.push_string(addr1, "f0").unwrap();
+        interpreter.execute("?NUMBER").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 0); // forth false
     }
 
     #[test]
     fn should_parse_hex_literals() {
-        let instance = build_interpreter().unwrap();
+        let interpreter = build_interpreter().unwrap();
         let addr1 = 0x500;
 
-        push(&instance, 16).unwrap();
-        execute(&instance, "BASE").unwrap();
-        execute(&instance, "!").unwrap();
-        push_string(&instance, addr1, "f0").unwrap();
-        execute(&instance, "?NUMBER").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
-        assert_eq!(pop(&instance).unwrap(), 0xf0);
+        interpreter.push(16).unwrap();
+        interpreter.execute("BASE").unwrap();
+        interpreter.execute("!").unwrap();
+        interpreter.push_string(addr1, "f0").unwrap();
+        interpreter.execute("?NUMBER").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
+        assert_eq!(interpreter.pop().unwrap(), 0xf0);
     }
 
     #[test]
     fn should_evaluate() {
-        let instance = build_interpreter().unwrap();
-        load_input(&instance, "2 3 +").unwrap();
-        execute(&instance, "EVALUATE").unwrap();
+        let interpreter = build_interpreter().unwrap();
+        interpreter.load_input("2 3 +").unwrap();
+        interpreter.execute("EVALUATE").unwrap();
 
         // assert no errors
-        execute(&instance, "ERROR@").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 0);
+        interpreter.execute("ERROR@").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 0);
 
         // assert expected output
-        assert_eq!(pop(&instance).unwrap(), 5);
+        assert_eq!(interpreter.pop().unwrap(), 5);
     }
 
     #[test]
     fn should_manipulate_stack() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        push(&instance, 2).unwrap();
-        push(&instance, 3).unwrap();
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.push(3).unwrap();
 
-        assert_eq!(pop(&instance).unwrap(), 3);
-        assert_eq!(pop(&instance).unwrap(), 2);
-        assert_eq!(pop(&instance).unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 3);
+        assert_eq!(interpreter.pop().unwrap(), 2);
+        assert_eq!(interpreter.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_do_math() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 3).unwrap();
-        push(&instance, 4).unwrap();
-        execute(&instance, "+").unwrap();
+        interpreter.push(3).unwrap();
+        interpreter.push(4).unwrap();
+        interpreter.execute("+").unwrap();
 
-        assert_eq!(pop(&instance).unwrap(), 7);
+        assert_eq!(interpreter.pop().unwrap(), 7);
     }
 
     #[test]
     fn should_do_division() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 6).unwrap();
-        push(&instance, 3).unwrap();
-        execute(&instance, "/").unwrap();
+        interpreter.push(6).unwrap();
+        interpreter.push(3).unwrap();
+        interpreter.execute("/").unwrap();
 
-        assert_eq!(pop(&instance).unwrap(), 2);
+        assert_eq!(interpreter.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_do_comparisons() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 2).unwrap();
-        push(&instance, 1).unwrap();
-        execute(&instance, ">").unwrap();
-        assert_eq!(pop(&instance).unwrap(), -1);
+        interpreter.push(2).unwrap();
+        interpreter.push(1).unwrap();
+        interpreter.execute(">").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), -1);
 
-        push(&instance, 1).unwrap();
-        execute(&instance, "<0").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 0);
+        interpreter.push(1).unwrap();
+        interpreter.execute("<0").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 0);
     }
 
     #[test]
     fn should_handle_signed_div_and_mod() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
         type TestCase = ((i32, i32), (i32, i32));
 
         let test_cases: Vec<TestCase> = vec![
@@ -323,15 +234,15 @@ mod tests {
             .map(|case| {
                 let ((divisor, dividend), _) = *case;
 
-                push(&instance, divisor).unwrap();
-                push(&instance, dividend).unwrap();
-                execute(&instance, "/").unwrap();
-                let quotient = pop(&instance).unwrap();
+                interpreter.push(divisor).unwrap();
+                interpreter.push(dividend).unwrap();
+                interpreter.execute("/").unwrap();
+                let quotient = interpreter.pop().unwrap();
 
-                push(&instance, divisor).unwrap();
-                push(&instance, dividend).unwrap();
-                execute(&instance, "MOD").unwrap();
-                let modulo = pop(&instance).unwrap();
+                interpreter.push(divisor).unwrap();
+                interpreter.push(dividend).unwrap();
+                interpreter.execute("MOD").unwrap();
+                let modulo = interpreter.pop().unwrap();
 
                 ((divisor, dividend), (quotient, modulo))
             })
@@ -341,17 +252,17 @@ mod tests {
 
     #[test]
     fn should_support_colon_words() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_colon_word("TEST", vec![Lit(2), Lit(3), XT("+")]);
         })
         .unwrap();
-        execute(&instance, "TEST").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 5);
+        interpreter.execute("TEST").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 5);
     }
 
     #[test]
     fn should_support_variables() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_variable_word("TESTVAR", 0);
             gen.define_colon_word(
                 "TEST",
@@ -359,13 +270,13 @@ mod tests {
             );
         })
         .unwrap();
-        execute(&instance, "TEST").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 1);
+        interpreter.execute("TEST").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_increment_variables() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_variable_word("TESTVAR", 6);
             gen.define_colon_word(
                 "TEST",
@@ -373,106 +284,106 @@ mod tests {
             );
         })
         .unwrap();
-        execute(&instance, "TEST").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 13);
+        interpreter.execute("TEST").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 13);
     }
 
     #[test]
     fn should_dup() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        execute(&instance, "DUP").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 1);
-        assert_eq!(pop(&instance).unwrap(), 1);
+        interpreter.push(1).unwrap();
+        interpreter.execute("DUP").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_swap() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        push(&instance, 2).unwrap();
-        execute(&instance, "SWAP").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 1);
-        assert_eq!(pop(&instance).unwrap(), 2);
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.execute("SWAP").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_rot() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        push(&instance, 2).unwrap();
-        push(&instance, 3).unwrap();
-        execute(&instance, "ROT").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 1);
-        assert_eq!(pop(&instance).unwrap(), 3);
-        assert_eq!(pop(&instance).unwrap(), 2);
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.push(3).unwrap();
+        interpreter.execute("ROT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 3);
+        assert_eq!(interpreter.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_nip() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        push(&instance, 2).unwrap();
-        push(&instance, 3).unwrap();
-        execute(&instance, "NIP").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 3);
-        assert_eq!(pop(&instance).unwrap(), 1);
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.push(3).unwrap();
+        interpreter.execute("NIP").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 3);
+        assert_eq!(interpreter.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_tuck() {
-        let instance = build(|_| {}).unwrap();
+        let interpreter = build(|_| {}).unwrap();
 
-        push(&instance, 1).unwrap();
-        push(&instance, 2).unwrap();
-        execute(&instance, "TUCK").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 2);
-        assert_eq!(pop(&instance).unwrap(), 1);
-        assert_eq!(pop(&instance).unwrap(), 2);
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.execute("TUCK").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 2);
+        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_support_literals() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_colon_word("THREE", vec![Lit(3)]);
         })
         .unwrap();
 
-        execute(&instance, "THREE").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 3);
+        interpreter.execute("THREE").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 3);
     }
 
     #[test]
     fn should_support_stack_manip() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_colon_word(
                 "TEST",
                 vec![Lit(3), XT("DUP"), XT("DUP"), XT("+"), XT("SWAP"), XT("/")],
             );
         })
         .unwrap();
-        execute(&instance, "TEST").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 2);
+        interpreter.execute("TEST").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_support_nested_colon_calls() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             gen.define_colon_word("SQUARE", vec![XT("DUP"), XT("*")]);
             gen.define_colon_word("TEST", vec![Lit(3), XT("SQUARE")]);
         })
         .unwrap();
-        execute(&instance, "TEST").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 9);
+        interpreter.execute("TEST").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 9);
     }
 
     #[test]
     fn should_support_branching() {
-        let instance = build(|gen| {
+        let interpreter = build(|gen| {
             #[rustfmt::skip]
             gen.define_colon_word("UPCHAR", vec![
                 XT("DUP"), XT("DUP"),
@@ -483,12 +394,12 @@ mod tests {
         })
         .unwrap();
 
-        push(&instance, 'a' as i32).unwrap();
-        execute(&instance, "UPCHAR").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 'A' as i32);
+        interpreter.push('a' as i32).unwrap();
+        interpreter.execute("UPCHAR").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 'A' as i32);
 
-        push(&instance, 'B' as i32).unwrap();
-        execute(&instance, "UPCHAR").unwrap();
-        assert_eq!(pop(&instance).unwrap(), 'B' as i32);
+        interpreter.push('B' as i32).unwrap();
+        interpreter.execute("UPCHAR").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 'B' as i32);
     }
 }

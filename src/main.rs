@@ -1,12 +1,12 @@
 use anyhow::Result;
-use forsm::{build_interpreter, execute, load_input, pop_string, push};
+use forsm::build_interpreter;
 
 fn main() -> Result<()> {
-    let instance = build_interpreter()?;
-    load_input(&instance, "Hello, world!")?;
-    push(&instance, ' ' as i32)?;
-    execute(&instance, "PARSE-NAME")?;
-    let result = pop_string(&instance)?;
+    let interpreter = build_interpreter()?;
+    interpreter.load_input("Hello, world!")?;
+    interpreter.push(' ' as i32)?;
+    interpreter.execute("PARSE-NAME")?;
+    let result = interpreter.pop_string()?;
     println!("{}", result);
     Ok(())
 }
