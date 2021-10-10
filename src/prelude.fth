@@ -77,11 +77,31 @@ CP @                        \ This is the start of a loop. Pushing CP onto the s
 ' BRANCH , SWAP ,           \ Unconditionally branch back to the start of the loop
 CP @ SWAP !                 \ Fill in the target of the forward jump, now that we've reached it
 \ Looping/conditionals will be a lot easier once we've got a compiler to handle branching
- ' DROP , ' DROP ,           \ Clear the parsed name from the stack
+ ' DROP , ' DROP ,          \ Clear the parsed name from the stack
 ' LAST-WORD , ' @ , ' , ,   \ Compile the pointer to the previous word
-' LAST-WORD , ' ! ,         \ And finally, update that LAST-WORD pointer to include our new word!
+' LAST-WORD , ' ! ,         \ update that LAST-WORD pointer to include our new word
+' (DOVAR) , ' , ,           \ and default to the behavior of a variable
 ' EXIT ,
 
-CREATE pants
-(DOCON) ,
-69 ,
+\ Now it's even less wordy to define words!
+\ Add a helper to set the XT of the currently-defined word
+( xt -- )
+CREATE XT,
+(DOCOL) CP @ 4 - !
+' LAST-WORD , ' @ , ' NAME>XT , ' ! ,
+' EXIT ,
+
+\ Support single-cell variables ( -- )
+CREATE VARIABLE
+(DOCOL) XT,
+' CREATE , ' LIT , 0 , ' , , \ Just CREATE but also reserve a cell of memory
+' EXIT ,
+
+\ Support single-cell constants ( val -- )
+CREATE CONSTANT
+(DOCOL) XT,
+' CREATE ,
+' (DOCON) , ' XT, , \ Set the behavior of the new constant
+' , , \ and just store the input param after it on the stack (as (DOCON) wants)
+' EXIT ,
+
