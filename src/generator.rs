@@ -47,23 +47,31 @@ impl Generator {
         let branch_xt = self.get_execution_token("BRANCH");
         let q_branch_xt = self.get_execution_token("?BRANCH");
         let mut bytes = vec![];
+        // track the end of the dictionary as we go, to turn relative jumps absolute
+        let mut cp = self.cp + 1 + name.len() as i32 + 4 + 4;
         for value in values {
             match value {
                 ColonValue::XT(name) => {
+                    cp += 4;
                     let xt = self.get_execution_token(name);
                     bytes.extend_from_slice(&xt.to_le_bytes())
                 }
                 ColonValue::Lit(value) => {
+                    cp += 8;
                     bytes.extend_from_slice(&lit_xt.to_le_bytes());
                     bytes.extend_from_slice(&value.to_le_bytes());
                 }
                 ColonValue::Branch(offset) => {
+                    cp += 8;
+                    let target = cp + offset;
                     bytes.extend_from_slice(&branch_xt.to_le_bytes());
-                    bytes.extend_from_slice(&offset.to_le_bytes());
+                    bytes.extend_from_slice(&target.to_le_bytes());
                 }
                 ColonValue::QBranch(offset) => {
+                    cp += 8;
+                    let target = cp + offset;
                     bytes.extend_from_slice(&q_branch_xt.to_le_bytes());
-                    bytes.extend_from_slice(&offset.to_le_bytes());
+                    bytes.extend_from_slice(&target.to_le_bytes());
                 }
             }
         }
@@ -414,14 +422,11 @@ impl Generator {
             0,
             vec![
                 // The instruction pointer is pointing to BRANCH's XT inside of a colon definition.
-                // The value after that is a literal; treat it as an offset to add to IP (where 0 is "next instr")
+                // The value after that is a literal jump address, jump there
                 GetGlobal(ip),
-                TeeLocal(0),
                 I32Load(2, 4),
-                I32Const(4), // Add 4 to account for the size of the literal
-                I32Add,
-                GetLocal(0),
-                I32Add,
+                I32Const(4), // Subtract 4 to account for the main loop incrementing the IP itself
+                I32Sub,
                 SetGlobal(ip),
             ],
         );
@@ -433,19 +438,16 @@ impl Generator {
                 Call(pop),
                 I32Eqz,
                 If(BlockType::Value(ValueType::I32)),
-                // Offset is based on the literal after the IP (+4 because of the literal's size)
+                // Jump to literal-after-the-IP - 4
                 GetGlobal(ip),
-                TeeLocal(0),
                 I32Load(2, 4),
                 I32Const(4),
-                I32Add,
-                Else, // Offset is just 4
+                I32Sub,
+                Else, // Just jump to 4-after-the-IP
                 GetGlobal(ip),
-                SetLocal(0),
                 I32Const(4),
-                End,
-                GetLocal(0),
                 I32Add,
+                End,
                 SetGlobal(ip),
             ],
         );
