@@ -2,3 +2,19 @@
 20 parse-name Woo type 20 emit 20 parse-name hoo! type 0a emit
 0a BASE !
 110 EMIT 105 emit 99 emit 101 emit
+
+-1 PARSE-NAME \ Define ' to make manual compilation easier
+DROP DROP
+-1 PARSE-NAME \ Manually compiling : ' 32 PARSE-NAME FIND-NAME NAME>XT ;
+DROP DROP
+1 C,
+39 C,
+LAST-WORD @ ,
+CP @ 6 - LAST-WORD !
+(DOCOL) ,
+32 PARSE-NAME LIT FIND-NAME NAME>XT ,
+32 ,
+32 PARSE-NAME PARSE-NAME FIND-NAME NAME>XT ,
+32 PARSE-NAME FIND-NAME FIND-NAME NAME>XT ,
+32 PARSE-NAME NAME>XT FIND-NAME NAME>XT ,
+32 PARSE-NAME EXIT FIND-NAME NAME>XT ,

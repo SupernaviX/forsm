@@ -267,7 +267,7 @@ impl Generator {
             ],
         );
         self.docon = docon;
-        self.define_constant_word("DOCON", docon as i32);
+        self.define_constant_word("(DOCON)", docon as i32);
     }
 
     fn define_variables(&mut self) {
@@ -282,7 +282,7 @@ impl Generator {
             ],
         );
         self.dovar = dovar;
-        self.define_constant_word("DOVAR", dovar as i32);
+        self.define_constant_word("(DOVAR)", dovar as i32);
         self.define_native_word("!", 0, vec![Call(pop), Call(pop), I32Store(2, 0)]);
         self.define_native_word("@", 0, vec![Call(pop), I32Load(2, 0), Call(push)]);
         self.define_native_word(
@@ -381,7 +381,7 @@ impl Generator {
             ],
         );
         self.docol = docol;
-        self.define_constant_word("DOCOL", docol as i32);
+        self.define_constant_word("(DOCOL)", docol as i32);
         // EXIT is how a colon word returns. It just restores the old IP.
         self.define_native_word(
             "EXIT",
