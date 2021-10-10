@@ -335,17 +335,12 @@ fn build_interpreter(gen: &mut Generator) {
         vec![XT("LIT"), XT("LIT"), XT(","), XT(",")],
     );
 
-    // Perform interpretation semantics for a word (or return if it errored) ( nt -- ? )
-    #[rustfmt::skip]
+    // Perform interpretation semantics for a word ( nt -- )
     gen.define_colon_word(
         "INTERPRET-NAME",
         vec![
-            XT("DUP"), XT("NAME>XT"), // get the word's XT
-            XT("SWAP"), XT("NAME>IMMEDIATE?"), // is the word immediate?
-            QBranch(16), // if so,
-            XT("DROP"), XT("TRUE"), // clear the stack, indicate badness
-            Branch(8),  // else,
-            XT("EXECUTE"), XT("FALSE"), // run it and indicate goodness
+            XT("NAME>XT"),
+            XT("EXECUTE"),
         ],
     );
 
@@ -378,15 +373,13 @@ fn build_interpreter(gen: &mut Generator) {
             XT("OVER"), XT("OVER"), XT("FIND-NAME"), // look it up in the dictionary
             XT("DUP"), XT("<>0"),
 
-            QBranch(64), // if we found the word in the dictionary,
+            QBranch(44), // if we found the word in the dictionary,
             XT("NIP"), XT("NIP"), // clean the name out of the stack, we're done with it
             XT("COMPILING?"),
             QBranch(12),
             XT("COMPILE-NAME"),
-            Branch(24),
+            Branch(4),
             XT("INTERPRET-NAME"),
-            QBranch(12), // if interpretation failed, return early
-            Lit(-1), XT("THROW"),
 
             Branch(52), // if we did not find the word,
             XT("DROP"), // clean stack of "xt"
@@ -396,9 +389,9 @@ fn build_interpreter(gen: &mut Generator) {
             QBranch(4),
             XT("COMPILE-LITERAL"),
             Branch(12), // if not, error and exit
-            Lit(-2), XT("THROW"),
+            Lit(-1), XT("THROW"),
 
-            Branch(-192), // end of loop
+            Branch(-172), // end of loop
         ],
     );
 }

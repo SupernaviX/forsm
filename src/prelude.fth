@@ -32,7 +32,7 @@ CP @ SWAP !
 -1 PARSE-NAME \ parse input until you find a nonexistent character, then throw out the string you've parsed.
 DROP DROP DROP DROP DROP DROP
 
-1 C,
+129 C,
 92 C,
 LAST-WORD @ ,
 CP @ 6 - LAST-WORD !
@@ -44,7 +44,7 @@ CP @ 6 - LAST-WORD !
 \ But inline comments sound nice too, I'll add those next
 
 \ I'll heavily comment the next definition to make it clearer what's going on
-1 C,  \ The name of this word is 1 character long. The word C, adds a single byte to the end of the definition
+129 C,  \ This word is immediate (128) and has a 1-character name (+1). The word C, adds a single byte to the end of the definition.
 40 C, \ This is the literal for (
 LAST-WORD @ , \ Link to the word before this in the dict The word , adds a cell (4 bytes) to the end of the current definition.
 CP @ 6 - LAST-WORD ! \ Update the var pointing to the most recently-defined word
@@ -53,7 +53,7 @@ CP @ 6 - LAST-WORD ! \ Update the var pointing to the most recently-defined word
 ' LIT , \ Add a literal value to the word. This compilex the execution token (XT) of LIT into the definition. At interpretation time, that gets run.
 41 , \ the literal value of ascii ) . The LIT word will return this value at interpretation time.
 ' PARSE-NAME , \ Read from input (this file) until we find that character.
-' DROP , ' DROP , \ PARSE-WORD returns a string, but we don't need it so we can throw it out
+' DROP , ' DROP , \ PARSE-NAME returns a string, but we don't need it so we can throw it out
 ' LIT , 32 , ' PARSE-NAME , ' DROP , ' DROP , \ and do the same to consume the next space-delimited word, which IS the )
 ' EXIT , \ Finally, return from the colon definition.
 
@@ -145,6 +145,6 @@ IMMEDIATE
 
 \ And we're done! We have colon words!
 
-: double dup + ;
+: double ( n -- n ) dup + ;
 
 33 double emit
