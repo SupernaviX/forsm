@@ -1,4 +1,4 @@
-use std::{cell::Cell, str};
+use std::{cell::Cell, fs, str};
 
 use anyhow::{anyhow, Result};
 use wasmer::{imports, Instance, Module, Store, Value};
@@ -14,6 +14,15 @@ impl Runtime {
         let import_object = imports! {};
         let instance = Instance::new(&module, &import_object)?;
         Ok(Self { instance })
+    }
+
+    pub fn run_file(&self, filename: &str) -> Result<String> {
+        let file = fs::read_to_string(filename)?;
+        let mut all_output = vec![];
+        for line in file.lines() {
+            all_output.push(self.interpret(line)?);
+        }
+        Ok(all_output.join(""))
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {

@@ -165,12 +165,28 @@ mod tests {
     }
 
     #[test]
+    fn should_parse_while_interpreting() {
+        let interpreter = build_interpreter().unwrap();
+        let output = interpreter.interpret("32 PARSE-NAME ASS").unwrap();
+
+        assert_eq!(output, "");
+        assert_eq!(interpreter.pop_string().unwrap(), "ASS");
+    }
+
+    #[test]
     fn should_emit_output() {
         let interpreter = build_interpreter().unwrap();
         let output = interpreter
             .interpret("110 EMIT 105 EMIT 99 EMIT 101 EMIT")
             .unwrap();
         assert_eq!(output, "nice");
+    }
+
+    #[test]
+    fn should_type_output() {
+        let interpreter = build_interpreter().unwrap();
+        let output = interpreter.interpret("32 parse-name k3wl! type").unwrap();
+        assert_eq!(output, "k3wl!");
     }
 
     #[test]

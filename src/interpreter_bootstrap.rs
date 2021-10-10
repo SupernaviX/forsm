@@ -30,6 +30,21 @@ fn build_io(gen: &mut Generator) {
         ],
     );
 
+    // ( c-addr u -- )
+    #[rustfmt::skip]
+    gen.define_colon_word(
+        "TYPE",
+        vec![
+            XT("DUP"), XT("=0"), // if input is empty
+            QBranch(12),
+            XT("DROP"), XT("DROP"), XT("EXIT"), // clean up stack and exit
+            // else
+            XT("SWAP"), XT("DUP"), XT("C@"), XT("EMIT"), // emit a char
+            XT("1+"), XT("SWAP"), XT("1-"), // decrement counts
+            Branch(-64), // goto start
+        ],
+    );
+
     // below words are just meant to be called by the host
 
     // set aside N bytes of input buffer
@@ -40,8 +55,10 @@ fn build_io(gen: &mut Generator) {
         vec![
             // update tib length
             XT("#TIB"), XT("!"),
+            // and the input pointer
+            Lit(0), XT(">IN"), XT("!"),
             // return tib head
-            XT("TIB"), XT("@")
+            XT("TIB"), XT("@"),
         ],
     );
 
