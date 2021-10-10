@@ -33,6 +33,24 @@ CP @ 6 - LAST-WORD !
 
 \ Now I can write comments like this!
 
+\ But inline comments sound nice too, I'll add those next
+
+\ I'll heavily comment the next definition to make it clearer what's going on
+1 C,  \ The name of this word is 1 character long. The word C, adds a single byte to the end of the definition
+40 C, \ This is the literal for (
+LAST-WORD @ , \ Link to the word before this in the dict The word , adds a cell (4 bytes) to the end of the current definition.
+CP @ 6 - LAST-WORD ! \ Update the var pointing to the most recently-defined word
+(DOCOL) , \ Mark this as a colon definition. (DOCOL) is a native word that starts running the body of a "colon definition"
+\ The actual "body" of the definition begins now!
+' LIT , \ Add a literal value to the word. This compilex the execution token (XT) of LIT into the definition. At interpretation time, that gets run.
+41 , \ the literal value of ascii ) . The LIT word will return this value at interpretation time.
+' PARSE-NAME , \ Read from input (this file) until we find that character.
+' DROP , ' DROP , \ PARSE-WORD returns a string, but we don't need it so we can throw it out
+' LIT , 32 , ' PARSE-NAME , ' DROP , ' DROP , \ and do the same to consume the next space-delimited word, which IS the )
+' EXIT , \ Finally, return from the colon definition.
+
+( Now I can add inline comments! )
+
 \ I'm tired of looking up ASCII values and manually doing math on string lengths.
 \ Defining CREATE to add words to the dictionary, so I don't have to so often.
 6 C,
