@@ -105,3 +105,46 @@ CREATE CONSTANT
 ' , , \ and just store the input param after it on the stack (as (DOCON) wants)
 ' EXIT ,
 
+\ Enough manual compilation! time to build colon definitions.
+\ Define a helper to set the IMMEDIATE flag on the last-defined word.
+\ IMMEDIATE words have behavior during compilation-mode; non-IMMEDIATE words are just baked into the current def.
+\ We need IMMEDIATE words to be able to shut the compiler off.
+CREATE IMMEDIATE
+(DOCOL) XT,
+' LIT , 128 ,
+' LAST-WORD , ' @ ,  ' +! ,
+' EXIT ,
+
+\ The word ] starts compilation.
+CREATE ]
+(DOCOL) XT,
+' LIT , -1 , ' STATE , ' ! ,
+' EXIT ,
+
+\ The word [ stops compilation, and goes back to interpreter mode.
+CREATE [
+(DOCOL) XT,
+' LIT , 0 , ' STATE , ' ! ,
+' EXIT ,
+IMMEDIATE \ THIS has to be immediate, otherwise the compiler runs forever!
+
+\ The word : starts a colon definition (hence the name)
+CREATE :
+(DOCOL) XT,
+] CREATE (DOCOL) XT, [ \ Start defining a colon definition
+' ] , \ Switch to compilation mode
+' EXIT ,
+
+\ The word ; ends a colon definition and switches back to interpretation
+CREATE ;
+(DOCOL) XT,
+' LIT , ' EXIT , ' , , \ Add EXIT to the end of the current definition
+' [ , \ Switch to interpretation mode
+' EXIT ,
+IMMEDIATE
+
+\ And we're done! We have colon words!
+
+: double dup + ;
+
+33 double emit

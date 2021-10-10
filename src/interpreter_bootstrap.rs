@@ -383,7 +383,7 @@ fn build_interpreter(gen: &mut Generator) {
             XT("COMPILING?"),
             QBranch(12),
             XT("COMPILE-NAME"),
-            Branch(28),
+            Branch(24),
             XT("INTERPRET-NAME"),
             QBranch(12), // if interpretation failed, return early
             Lit(-1), XT("THROW"),
