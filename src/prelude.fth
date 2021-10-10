@@ -4,11 +4,9 @@
 110 EMIT 105 emit 99 emit 101 emit
 
 -1 PARSE-NAME \ Define ' to make manual compilation easier
-DROP DROP
 -1 PARSE-NAME \ ' DUP puts the XT of the word DUP on the stack. v useful for compilation
-DROP DROP
--1 PARSE-NAME \ Manually compiling : ' 32 PARSE-NAME FIND-NAME NAME>XT ;
-DROP DROP
+-1 PARSE-NAME \ Manually compiling : ' BL PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN NAME>XT ;
+DROP DROP DROP DROP DROP DROP
 1 C,
 39 C,
 LAST-WORD @ ,
@@ -18,11 +16,22 @@ CP @ 6 - LAST-WORD !
 32 ,
 32 PARSE-NAME PARSE-NAME FIND-NAME NAME>XT ,
 32 PARSE-NAME FIND-NAME FIND-NAME NAME>XT ,
+32 PARSE-NAME DUP FIND-NAME NAME>XT ,
+32 PARSE-NAME =0 FIND-NAME NAME>XT ,
+32 PARSE-NAME ?BRANCH FIND-NAME NAME>XT ,
+CP @ 0 ,
+32 PARSE-NAME LIT FIND-NAME NAME>XT ,
+-2 ,
+32 PARSE-NAME THROW FIND-NAME NAME>XT ,
+CP @ SWAP !
 32 PARSE-NAME NAME>XT FIND-NAME NAME>XT ,
 32 PARSE-NAME EXIT FIND-NAME NAME>XT ,
 
--1 PARSE-NAME \ Real comments sound useful, adding those next
-DROP DROP
+-1 PARSE-NAME \ Now I can just write "' DUP ," to compile DUP into a def, without this verbose mess.
+-1 PARSE-NAME \ Real comments sound useful, adding those next. Comments use the same trick I'm doing manually here;
+-1 PARSE-NAME \ parse input until you find a nonexistent character, then throw out the string you've parsed.
+DROP DROP DROP DROP DROP DROP
+
 1 C,
 92 C,
 LAST-WORD @ ,
@@ -32,7 +41,6 @@ CP @ 6 - LAST-WORD !
 ' EXIT ,
 
 \ Now I can write comments like this!
-
 \ But inline comments sound nice too, I'll add those next
 
 \ I'll heavily comment the next definition to make it clearer what's going on
@@ -49,7 +57,7 @@ CP @ 6 - LAST-WORD ! \ Update the var pointing to the most recently-defined word
 ' LIT , 32 , ' PARSE-NAME , ' DROP , ' DROP , \ and do the same to consume the next space-delimited word, which IS the )
 ' EXIT , \ Finally, return from the colon definition.
 
-( Now I can add inline comments! )
+10 EMIT 67 EMIT 79 EMIT ( Now I can add inline comments! ) 79 EMIT 76 EMIT
 
 \ I'm tired of looking up ASCII values and manually doing math on string lengths.
 \ Defining CREATE to add words to the dictionary, so I don't have to so often.

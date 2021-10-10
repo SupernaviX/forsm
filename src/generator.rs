@@ -344,7 +344,7 @@ impl Generator {
         );
         self.define_native_word("EXECUTE", 0, vec![Call(pop), Call(execute)]);
 
-        // Start is the interpreter's main loop, it calls EXECUTE until the program says to pause.
+        // Start is the interpreter's main loop, it calls EXECUTE until the program says to stop.
         // Assuming that the caller has set IP to something reasonable first.
         let start = self.compiler.add_func(
             vec![],
@@ -372,7 +372,7 @@ impl Generator {
             ],
         );
         self.start = start;
-        self.define_native_word("PAUSE", 0, vec![I32Const(-1), SetGlobal(stopped)]);
+        self.define_native_word("STOP", 0, vec![I32Const(-1), SetGlobal(stopped)]);
 
         // DOCOL is how a colon word is executed. It just messes with the IP.
         let docol = self.create_native_callable(
@@ -648,10 +648,10 @@ impl Generator {
     }
 
     fn finalize(mut self) -> Self {
-        // For testing purposes, define a word that just calls another word and pauses.
+        // For testing purposes, define a word that just calls another word and stops.
         self.define_colon_word(
             "RUN-WORD",
-            vec![ColonValue::XT("EXECUTE"), ColonValue::XT("PAUSE")],
+            vec![ColonValue::XT("EXECUTE"), ColonValue::XT("STOP")],
         );
 
         // Now that we're done adding things to the dictionary,

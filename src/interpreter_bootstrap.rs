@@ -209,7 +209,7 @@ fn build_parser(gen: &mut Generator) {
 fn build_interpreter(gen: &mut Generator) {
     // for now, store errors in here
     gen.define_variable_word("ERROR", 0);
-    gen.define_colon_word("ERROR!", vec![XT("ERROR"), XT("!")]);
+    gen.define_colon_word("THROW", vec![XT("ERROR"), XT("!"), XT("STOP")]);
     gen.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
 
     // Case-insensitive string equality against a known-capital string
@@ -378,27 +378,27 @@ fn build_interpreter(gen: &mut Generator) {
             XT("OVER"), XT("OVER"), XT("FIND-NAME"), // look it up in the dictionary
             XT("DUP"), XT("<>0"),
 
-            QBranch(68), // if we found the word in the dictionary,
+            QBranch(64), // if we found the word in the dictionary,
             XT("NIP"), XT("NIP"), // clean the name out of the stack, we're done with it
             XT("COMPILING?"),
             QBranch(12),
             XT("COMPILE-NAME"),
             Branch(28),
             XT("INTERPRET-NAME"),
-            QBranch(16), // if interpretation failed, return early
-            Lit(-1), XT("ERROR!"), XT("EXIT"),
+            QBranch(12), // if interpretation failed, return early
+            Lit(-1), XT("THROW"),
 
-            Branch(56), // if we did not find the word,
+            Branch(52), // if we did not find the word,
             XT("DROP"), // clean stack of "xt"
             XT("?NUMBER"), // maybe it's a number?
             QBranch(24),  // if so, either bake the value in or leave it on the stack
             XT("COMPILING?"),
             QBranch(4),
             XT("COMPILE-LITERAL"),
-            Branch(16), // if not, error and exit
-            Lit(-2), XT("ERROR!"), XT("EXIT"),
+            Branch(12), // if not, error and exit
+            Lit(-2), XT("THROW"),
 
-            Branch(-200), // end of loop
+            Branch(-192), // end of loop
         ],
     );
 }
