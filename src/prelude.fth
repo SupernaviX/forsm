@@ -105,6 +105,8 @@ CREATE CONSTANT
 ' , , \ and just store the input param after it on the stack (as (DOCON) wants)
 ' EXIT ,
 
+32 CONSTANT BL
+
 \ Enough manual compilation! time to build colon definitions.
 \ Define a helper to set the IMMEDIATE flag on the last-defined word.
 \ IMMEDIATE words have behavior during compilation-mode; non-IMMEDIATE words are just baked into the current def.
@@ -144,7 +146,41 @@ CREATE ;
 IMMEDIATE
 
 \ And we're done! We have colon words!
+\ now let's make some niceties.
+: here ( -- n ) cp @ ;
 
-: double ( n -- n ) dup + ;
+\ like branching!
+: >mark here 0 , ;
+: >resolve here swap ! ;
+: <mark here ;
+: <resolve , ;
 
-33 double emit
+: ['] \ ['] DUP pushes the XT of dup onto the stack at runtime
+  ' \ get the XT
+  [ ' LIT , ' LIT , ] , \ compile LIT
+  , \ compile the XT
+  ; immediate
+
+\ Conditionals!
+: if ['] ?branch , >mark ; immediate
+: else ['] branch , >mark swap >resolve ; immediate
+: then >resolve ; immediate
+
+\ POSTPONE parses a word, and compiles its compilation semantics into the current word
+: POSTPONE ( "ccc" -- )
+  bl parse-name find-name dup =0 if -1 throw then \ Find the nt for the next word, throw if we cna't
+  dup name>immediate?
+    if    name>xt , \ compile this XT into the def
+    else  ['] lit , name>xt , ['] , , \ compile "compile this XT" into the def
+    then
+  ; immediate
+
+: endif POSTPONE then ; immediate
+
+: postplus POSTPONE + ; immediate
+
+: test ( n ? -- n )
+  if 2 + else 1 + endif 3 postplus ;
+
+65 0 test emit
+65 -1 test emit
