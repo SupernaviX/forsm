@@ -175,12 +175,9 @@ IMMEDIATE
     then
   ; immediate
 
-: endif POSTPONE then ; immediate
-
-: postplus POSTPONE + ; immediate
-
-: test ( n ? -- n )
-  if 2 + else 1 + endif 3 postplus ;
-
-65 0 test emit
-65 -1 test emit
+\ Loops!
+: begin <mark ; immediate
+: until POSTPONE ?branch <resolve ; immediate
+: again POSTPONE branch <resolve ; immediate
+: while POSTPONE ?branch >mark ; immediate
+: repeat swap POSTPONE branch <resolve >resolve ; immediate
