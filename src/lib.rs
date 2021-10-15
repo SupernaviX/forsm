@@ -344,6 +344,19 @@ mod tests {
     }
 
     #[test]
+    fn should_backwards_rot() {
+        let interpreter = build(|_| {}).unwrap();
+
+        interpreter.push(1).unwrap();
+        interpreter.push(2).unwrap();
+        interpreter.push(3).unwrap();
+        interpreter.execute("-ROT").unwrap();
+        assert_eq!(interpreter.pop().unwrap(), 2);
+        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(interpreter.pop().unwrap(), 3);
+    }
+
+    #[test]
     fn should_nip() {
         let interpreter = build(|_| {}).unwrap();
 

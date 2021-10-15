@@ -336,13 +336,7 @@ fn build_interpreter(gen: &mut Generator) {
     );
 
     // Perform interpretation semantics for a word ( nt -- )
-    gen.define_colon_word(
-        "INTERPRET-NAME",
-        vec![
-            XT("NAME>XT"),
-            XT("EXECUTE"),
-        ],
-    );
+    gen.define_colon_word("INTERPRET-NAME", vec![XT("NAME>XT"), XT("EXECUTE")]);
 
     // Perform compilation semantics for a word ( nt -- )
     #[rustfmt::skip]

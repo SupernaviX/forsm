@@ -247,7 +247,7 @@ variable do-sys
 \ true if newi JUST crossed the threshold of target
 : (+done?) ( oldi newi target )
   tuck < ( oldi target newi<target? )
-  rot rot < ( newi<target? oldi<target?)
+  -rot < ( newi<target? oldi<target?)
   <>
 ;
 

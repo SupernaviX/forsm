@@ -258,6 +258,28 @@ impl Generator {
                 I32Store(2, 8),
             ],
         );
+        self.define_native_word(
+            "-ROT",
+            0,
+            vec![
+                // like two rots, or rot backwards
+                GetGlobal(stack),
+                I32Const(8),
+                I32Sub,
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 4),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 8),
+                I32Store(2, 0),
+                I32Store(2, 8),
+                I32Store(2, 4),
+            ],
+        );
         self.define_native_word(">R", 0, vec![Call(pop), Call(push_r)]);
         self.define_native_word("R>", 0, vec![Call(pop_r), Call(push)]);
         self.define_native_word("R@", 0, vec![GetGlobal(r_stack), I32Load(2, 0), Call(push)]);
