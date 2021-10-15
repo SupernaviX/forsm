@@ -148,6 +148,8 @@ IMMEDIATE
 \ And we're done! We have colon words!
 \ now let's make some niceties.
 : here ( -- n ) cp @ ;
+: hex ( -- ) 16 base @ ;
+: decimal ( -- ) 10 base @ ;
 
 \ like branching!
 : >mark here 0 , ;
@@ -155,11 +157,17 @@ IMMEDIATE
 : <mark here ;
 : <resolve , ;
 
+\ compile-time literals!
+
 : ['] \ ['] DUP pushes the XT of dup onto the stack at runtime
   ' \ get the XT
   [ ' LIT , ' LIT , ] , \ compile LIT
   , \ compile the XT
-  ; immediate
+; immediate
+
+: literal ( n -- ) \ [ 6 ] literal pushes 6 onto the stack at runtime
+  ['] LIT , ,
+; immediate
 
 \ Conditionals!
 : if ['] ?branch , >mark ; immediate
@@ -207,10 +215,8 @@ variable do-sys
   then
 ;
 
-: (done?) over over = ;
-
 \ start of a do loop. always runs the body at least once
-: do ( max start -- ) 
+: do ( target start -- )
   do-sys @
   postpone swap
   <mark
@@ -218,21 +224,39 @@ variable do-sys
   postpone >r postpone >r
 ; immediate
 
-\ like do, but only run if max ain't == start
-: ?do ( max start -- )
+\ like do, but only run if target ain't == start
+: ?do ( target start -- )
   do-sys @
   postpone swap
   <mark                   
-  postpone (done?) postpone =0
+  postpone over postpone over postpone <>
   postpone ?branch >mark do-sys ! \ possible forward branch here
   postpone >r postpone >r
 ; immediate
 
 \ end of a do loop, increment I and if we HIT the loop end we are done
 : loop ( -- )
-  postpone r> postpone 1+ postpone r>
-  postpone (done?)
+  postpone r> postpone 1+ postpone r> ( newi target )
+  postpone over postpone over postpone = ( newi target ? )
   postpone ?branch <resolve 
+  postpone drop postpone drop
+  do-sys @ >resolve-chain
+  do-sys !
+; immediate
+
+\ true if newi JUST crossed the threshold of target
+: (+done?) ( oldi newi target )
+  tuck < ( oldi target newi<target? )
+  rot rot < ( newi<target? oldi<target?)
+  <>
+;
+
+\ loop but iterate by some custom amount, and break if we PASSt arget
+: +loop ( inc -- )
+  postpone r> postpone tuck postpone + ( oldi newi )
+  postpone tuck postpone r@ ( newi oldi newi target )
+  postpone (+done?) postpone r> postpone swap ( newi target ? )
+  postpone ?branch <resolve
   postpone drop postpone drop
   do-sys @ >resolve-chain
   do-sys !
@@ -247,9 +271,9 @@ variable do-sys
 : i ( -- n ) postpone r@ ; immediate
 
 : test
-  4 0 ?do
+  0 10 ?do
   65 i + emit
   i 2 = if leave then
-  loop
+  -2 +loop
   69 emit ;
 test
