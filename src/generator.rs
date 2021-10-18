@@ -113,7 +113,8 @@ impl Generator {
                 I32Store(2, 0),
                 End,
             ];
-            let push = compiler.add_func(vec![ValueType::I32], vec![], vec![], push_instructions);
+            let push =
+                compiler.add_native_func(vec![ValueType::I32], vec![], vec![], push_instructions);
 
             let pop_instructions = vec![
                 // read data
@@ -126,7 +127,8 @@ impl Generator {
                 SetGlobal(stack),
                 End,
             ];
-            let pop = compiler.add_func(vec![], vec![ValueType::I32], vec![], pop_instructions);
+            let pop =
+                compiler.add_native_func(vec![], vec![ValueType::I32], vec![], pop_instructions);
 
             (push, pop)
         };
@@ -343,7 +345,7 @@ impl Generator {
         let stopped = self.add_global(0);
 
         // "execute" takes an XT as a parameter and runs it
-        let execute = self.compiler.add_func(
+        let execute = self.compiler.add_native_func(
             vec![ValueType::I32],
             vec![],
             vec![],
@@ -368,7 +370,7 @@ impl Generator {
 
         // Start is the interpreter's main loop, it calls EXECUTE until the program says to stop.
         // Assuming that the caller has set IP to something reasonable first.
-        let start = self.compiler.add_func(
+        let start = self.compiler.add_native_func(
             vec![],
             vec![],
             vec![],
@@ -697,7 +699,7 @@ impl Generator {
         // For testing, export every word as a function-which-EXECUTEs-that-word
         let run_xt = self.get_execution_token("RUN-WORD");
         for (word, xt) in self.execution_tokens.clone() {
-            let func = self.compiler.add_func(
+            let func = self.compiler.add_native_func(
                 vec![],
                 vec![],
                 vec![],
@@ -723,9 +725,9 @@ impl Generator {
     fn create_native_callable(&mut self, locals: usize, mut instructions: Vec<Instruction>) -> u32 {
         instructions.push(End);
         let locals = vec![ValueType::I32; locals];
-        let func = self
-            .compiler
-            .add_func(vec![ValueType::I32], vec![], locals, instructions);
+        let func =
+            self.compiler
+                .add_native_func(vec![ValueType::I32], vec![], locals, instructions);
         self.compiler.add_table_entry(func)
     }
 
