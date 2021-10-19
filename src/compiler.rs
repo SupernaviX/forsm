@@ -1,8 +1,6 @@
 use anyhow::Result;
 use parity_wasm::{
-    builder::{
-        self, signature, ExportBuilder, ExportInternalBuilder, GlobalBuilder, ModuleBuilder,
-    },
+    builder::{self, signature, GlobalBuilder, ModuleBuilder},
     elements::{
         FuncBody,
         Instruction::{self, I32Const},
@@ -51,8 +49,8 @@ impl Func {
                 let sig_index = builder.push_signature(sig);
                 builder
                     .import()
-                    .module(&module)
-                    .field(&field)
+                    .module(module)
+                    .field(field)
                     .external()
                     .func(sig_index)
                     .build()
@@ -73,6 +71,7 @@ pub struct Compiler {
     builder: Option<ModuleBuilder>,
     globals: u32,
     functions: Vec<Func>,
+    exported_functions: Vec<(String, u32)>,
     table_entries: Vec<u32>,
 }
 impl Compiler {
@@ -149,13 +148,8 @@ impl Compiler {
         index
     }
 
-    pub fn add_export<T>(&mut self, field: &str, define: T)
-    where
-        T: FnOnce(
-            ExportInternalBuilder<ExportBuilder<ModuleBuilder>>,
-        ) -> ExportBuilder<ModuleBuilder>,
-    {
-        self.update(|b| define(b.export().field(field).internal()).build());
+    pub fn add_exported_func(&mut self, field: &str, func: u32) {
+        self.exported_functions.push((field.to_owned(), func));
     }
 
     pub fn compile(mut self) -> Result<Vec<u8>> {
@@ -167,9 +161,13 @@ impl Compiler {
             .with_min(self.table_entries.len() as u32)
             .with_element(0, self.table_entries)
             .build();
-        for def in self.functions.iter_mut() {
+        for def in self.functions.iter() {
             builder = def.compile(builder);
         }
+        for (field, func) in self.exported_functions.iter() {
+            builder = builder.export().field(field).internal().func(*func).build();
+        }
+
         let module = builder.build();
         let binary = serialize(module)?;
         Ok(binary)
@@ -194,6 +192,9 @@ impl Compiler {
             current_index += 1;
         }
 
+        for (_, func_export) in self.exported_functions.iter_mut() {
+            *func_export = real_indices[*func_export as usize];
+        }
         for table_entry in self.table_entries.iter_mut() {
             *table_entry = real_indices[*table_entry as usize];
         }
@@ -214,6 +215,7 @@ impl Default for Compiler {
             builder,
             globals: 0,
             functions: vec![],
+            exported_functions: vec![],
             table_entries: vec![],
         }
     }

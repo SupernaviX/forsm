@@ -5,25 +5,39 @@ mod runtime;
 
 use anyhow::Result;
 use generator::Generator;
-use runtime::Runtime;
+use runtime::{InterpreterRuntime, Runtime};
+use wasmer::{imports, ImportObject, Store};
 
-pub fn build_interpreter() -> Result<Runtime> {
-    build(interpreter_bootstrap::build)
+pub fn build_interpreter() -> Result<InterpreterRuntime> {
+    let mut gen = Generator::default();
+    interpreter_bootstrap::build(&mut gen);
+    let binary = gen.compile()?;
+    InterpreterRuntime::new(&binary)
 }
 
 pub fn build<T>(func: T) -> Result<Runtime>
 where
     T: FnOnce(&mut Generator),
 {
+    build_with_imports(func, |_| imports! {})
+}
+
+pub fn build_with_imports<T, F>(func: T, imports: F) -> Result<Runtime>
+where
+    T: FnOnce(&mut Generator),
+    F: FnOnce(&Store) -> ImportObject,
+{
     let mut gen = Generator::default();
     func(&mut gen);
     let binary = gen.compile()?;
-    Runtime::new(&binary)
+    Runtime::new(&binary, imports)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build, build_interpreter, generator::ColonValue::*};
+    use wasmer::{imports, Function};
+
+    use super::{build, build_interpreter, build_with_imports, generator::ColonValue::*};
 
     #[test]
     fn should_parse_string() {
@@ -191,56 +205,56 @@ mod tests {
 
     #[test]
     fn should_manipulate_stack() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.push(3).unwrap();
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.push(3).unwrap();
 
-        assert_eq!(interpreter.pop().unwrap(), 3);
-        assert_eq!(interpreter.pop().unwrap(), 2);
-        assert_eq!(interpreter.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 3);
+        assert_eq!(runtime.pop().unwrap(), 2);
+        assert_eq!(runtime.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_do_math() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(3).unwrap();
-        interpreter.push(4).unwrap();
-        interpreter.execute("+").unwrap();
+        runtime.push(3).unwrap();
+        runtime.push(4).unwrap();
+        runtime.execute("+").unwrap();
 
-        assert_eq!(interpreter.pop().unwrap(), 7);
+        assert_eq!(runtime.pop().unwrap(), 7);
     }
 
     #[test]
     fn should_do_division() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(6).unwrap();
-        interpreter.push(3).unwrap();
-        interpreter.execute("/").unwrap();
+        runtime.push(6).unwrap();
+        runtime.push(3).unwrap();
+        runtime.execute("/").unwrap();
 
-        assert_eq!(interpreter.pop().unwrap(), 2);
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_do_comparisons() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(2).unwrap();
-        interpreter.push(1).unwrap();
-        interpreter.execute(">").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), -1);
+        runtime.push(2).unwrap();
+        runtime.push(1).unwrap();
+        runtime.execute(">").unwrap();
+        assert_eq!(runtime.pop().unwrap(), -1);
 
-        interpreter.push(1).unwrap();
-        interpreter.execute("<0").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 0);
+        runtime.push(1).unwrap();
+        runtime.execute("<0").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0);
     }
 
     #[test]
     fn should_handle_signed_div_and_mod() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
         type TestCase = ((i32, i32), (i32, i32));
 
         let test_cases: Vec<TestCase> = vec![
@@ -255,15 +269,15 @@ mod tests {
             .map(|case| {
                 let ((divisor, dividend), _) = *case;
 
-                interpreter.push(divisor).unwrap();
-                interpreter.push(dividend).unwrap();
-                interpreter.execute("/").unwrap();
-                let quotient = interpreter.pop().unwrap();
+                runtime.push(divisor).unwrap();
+                runtime.push(dividend).unwrap();
+                runtime.execute("/").unwrap();
+                let quotient = runtime.pop().unwrap();
 
-                interpreter.push(divisor).unwrap();
-                interpreter.push(dividend).unwrap();
-                interpreter.execute("MOD").unwrap();
-                let modulo = interpreter.pop().unwrap();
+                runtime.push(divisor).unwrap();
+                runtime.push(dividend).unwrap();
+                runtime.execute("MOD").unwrap();
+                let modulo = runtime.pop().unwrap();
 
                 ((divisor, dividend), (quotient, modulo))
             })
@@ -273,17 +287,17 @@ mod tests {
 
     #[test]
     fn should_support_colon_words() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_colon_word("TEST", vec![Lit(2), Lit(3), XT("+")]);
         })
         .unwrap();
-        interpreter.execute("TEST").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 5);
+        runtime.execute("TEST").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 5);
     }
 
     #[test]
     fn should_support_variables() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_variable_word("TESTVAR", 0);
             gen.define_colon_word(
                 "TEST",
@@ -291,13 +305,13 @@ mod tests {
             );
         })
         .unwrap();
-        interpreter.execute("TEST").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 1);
+        runtime.execute("TEST").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_increment_variables() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_variable_word("TESTVAR", 6);
             gen.define_colon_word(
                 "TEST",
@@ -305,119 +319,119 @@ mod tests {
             );
         })
         .unwrap();
-        interpreter.execute("TEST").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 13);
+        runtime.execute("TEST").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 13);
     }
 
     #[test]
     fn should_dup() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.execute("DUP").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 1);
-        assert_eq!(interpreter.pop().unwrap(), 1);
+        runtime.push(1).unwrap();
+        runtime.execute("DUP").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_swap() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.execute("SWAP").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 1);
-        assert_eq!(interpreter.pop().unwrap(), 2);
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.execute("SWAP").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_rot() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.push(3).unwrap();
-        interpreter.execute("ROT").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 1);
-        assert_eq!(interpreter.pop().unwrap(), 3);
-        assert_eq!(interpreter.pop().unwrap(), 2);
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.push(3).unwrap();
+        runtime.execute("ROT").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 3);
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_backwards_rot() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.push(3).unwrap();
-        interpreter.execute("-ROT").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 2);
-        assert_eq!(interpreter.pop().unwrap(), 1);
-        assert_eq!(interpreter.pop().unwrap(), 3);
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.push(3).unwrap();
+        runtime.execute("-ROT").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 2);
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 3);
     }
 
     #[test]
     fn should_nip() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.push(3).unwrap();
-        interpreter.execute("NIP").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 3);
-        assert_eq!(interpreter.pop().unwrap(), 1);
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.push(3).unwrap();
+        runtime.execute("NIP").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 3);
+        assert_eq!(runtime.pop().unwrap(), 1);
     }
 
     #[test]
     fn should_tuck() {
-        let interpreter = build(|_| {}).unwrap();
+        let runtime = build(|_| {}).unwrap();
 
-        interpreter.push(1).unwrap();
-        interpreter.push(2).unwrap();
-        interpreter.execute("TUCK").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 2);
-        assert_eq!(interpreter.pop().unwrap(), 1);
-        assert_eq!(interpreter.pop().unwrap(), 2);
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.execute("TUCK").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 2);
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_support_literals() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_colon_word("THREE", vec![Lit(3)]);
         })
         .unwrap();
 
-        interpreter.execute("THREE").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 3);
+        runtime.execute("THREE").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 3);
     }
 
     #[test]
     fn should_support_stack_manip() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_colon_word(
                 "TEST",
                 vec![Lit(3), XT("DUP"), XT("DUP"), XT("+"), XT("SWAP"), XT("/")],
             );
         })
         .unwrap();
-        interpreter.execute("TEST").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 2);
+        runtime.execute("TEST").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
     fn should_support_nested_colon_calls() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             gen.define_colon_word("SQUARE", vec![XT("DUP"), XT("*")]);
             gen.define_colon_word("TEST", vec![Lit(3), XT("SQUARE")]);
         })
         .unwrap();
-        interpreter.execute("TEST").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 9);
+        runtime.execute("TEST").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 9);
     }
 
     #[test]
     fn should_support_branching() {
-        let interpreter = build(|gen| {
+        let runtime = build(|gen| {
             #[rustfmt::skip]
             gen.define_colon_word("UPCHAR", vec![
                 XT("DUP"), XT("DUP"),
@@ -428,12 +442,51 @@ mod tests {
         })
         .unwrap();
 
-        interpreter.push('a' as i32).unwrap();
-        interpreter.execute("UPCHAR").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 'A' as i32);
+        runtime.push('a' as i32).unwrap();
+        runtime.execute("UPCHAR").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 'A' as i32);
 
-        interpreter.push('B' as i32).unwrap();
-        interpreter.execute("UPCHAR").unwrap();
-        assert_eq!(interpreter.pop().unwrap(), 'B' as i32);
+        runtime.push('B' as i32).unwrap();
+        runtime.execute("UPCHAR").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 'B' as i32);
+    }
+
+    #[test]
+    fn should_support_imports() {
+        let runtime = build_with_imports(
+            |gen| {
+                gen.define_imported_word("test", "SEVENTEEN", 0, 2);
+                gen.define_imported_word("test", "SWALLOW", 2, 0);
+                gen.define_imported_word("test", "TRIM", 2, 2);
+            },
+            |store| {
+                imports! {
+                    "test" => {
+                        "seventeen" => Function::new_native(store, || (10, 7)),
+                        "swallow" => Function::new_native(store, |_: i32, _: i32| {}),
+                        "trim" => Function::new_native(store, |a: i32, b: i32| {
+                            (a + 4, b - 8)
+                        }),
+                    }
+                }
+            },
+        )
+        .unwrap();
+
+        runtime.execute("SEVENTEEN").unwrap();
+        runtime.execute("+").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 17);
+
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.push(3).unwrap();
+        runtime.execute("SWALLOW").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+
+        runtime.push(0).unwrap();
+        runtime.push(16).unwrap();
+        runtime.execute("TRIM").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 8);
+        assert_eq!(runtime.pop().unwrap(), 4);
     }
 }

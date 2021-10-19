@@ -16,6 +16,7 @@ pub enum ColonValue {
 
 pub struct Generator {
     compiler: Compiler,
+    stack: u32,
     push: u32,
     pop: u32,
     push_r: u32,
@@ -81,6 +82,72 @@ impl Generator {
         self.define_word(name, docol, &bytes);
     }
 
+    pub fn define_imported_word(
+        &mut self,
+        module: &str,
+        name: &str,
+        params: usize,
+        results: usize,
+    ) {
+        // Define an imported with the given signature, but a lowercase name
+        let field = name.to_ascii_lowercase();
+        let func = self.compiler.add_imported_func(
+            module.to_owned(),
+            field,
+            vec![ValueType::I32; params],
+            vec![ValueType::I32; results],
+        );
+
+        // Define a native word to call the import using the stack
+        let locals = if results == 0 { 0 } else { 1 };
+        let mut instructions = vec![];
+        if params > 0 {
+            // get the lowest parameter address into local 0 and onto the stack
+            instructions.push(GetGlobal(self.stack));
+            if params > 1 {
+                instructions.push(I32Const((params as i32 - 1) * 4));
+                instructions.push(I32Sub);
+            }
+            instructions.push(TeeLocal(0));
+            // pass parameters in LIFO order, so stack effects match function signatures
+            for param in 0..params {
+                if param > 0 {
+                    instructions.push(GetLocal(0));
+                }
+                instructions.push(I32Load(2, param as u32 * 4));
+            }
+        }
+        instructions.push(Call(func));
+        if results > 0 {
+            // get the lowest result address in local 0 and on the stack
+            if params == 0 {
+                instructions.push(GetGlobal(self.stack));
+                instructions.push(I32Const(4));
+                instructions.push(I32Add);
+                instructions.push(SetLocal(0));
+            }
+            // store results in FIFO order, also so stack effects match signatures
+            for result in 0..results {
+                instructions.push(SetLocal(1));
+                instructions.push(GetLocal(0));
+                instructions.push(GetLocal(1));
+                instructions.push(I32Store(2, (results - 1 - result) as u32 * 4))
+            }
+        }
+        if params != results {
+            // move the stack pointer appropriately.
+            // We already have the "lowest" address stored in local 0,
+            // just offset that by the size of results and store it
+            instructions.push(GetLocal(0));
+            if results != 1 {
+                instructions.push(I32Const((results as i32 - 1) * 4));
+                instructions.push(I32Add);
+            }
+            instructions.push(SetGlobal(self.stack));
+        }
+        self.define_native_word(name, locals, instructions);
+    }
+
     pub fn compile(self) -> Result<Vec<u8>> {
         self.finalize().compiler.compile()
     }
@@ -135,6 +202,7 @@ impl Generator {
         // define the normal stack
         let stack = self.add_global(0x00);
         let (push, pop) = define_stack(&mut self.compiler, stack);
+        self.stack = stack;
         self.push = push;
         self.pop = pop;
         // define the return stack
@@ -143,8 +211,8 @@ impl Generator {
         self.push_r = push_r;
         self.pop_r = pop_r;
 
-        self.compiler.add_export("push", |e| e.func(push));
-        self.compiler.add_export("pop", |e| e.func(pop));
+        self.compiler.add_exported_func("push", push);
+        self.compiler.add_exported_func("pop", pop);
         self.define_native_word(
             "DUP",
             0,
@@ -712,7 +780,7 @@ impl Generator {
                     End,
                 ],
             );
-            self.compiler.add_export(&word, |e| e.func(func));
+            self.compiler.add_exported_func(&word, func);
         }
         self
     }
@@ -773,6 +841,7 @@ impl Default for Generator {
         compiler.add_memory();
         Self {
             compiler,
+            stack: 0,
             push: 0,
             pop: 0,
             push_r: 0,
