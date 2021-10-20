@@ -1,28 +1,28 @@
-use super::generator::{ColonValue::*, Generator};
+use super::compiler::{ColonValue::*, Compiler};
 
 /* Build a very basic INTERPRET word */
-pub fn build(gen: &mut Generator) {
-    build_io(gen);
-    build_parser(gen);
-    build_interpreter(gen);
+pub fn build(compiler: &mut Compiler) {
+    build_io(compiler);
+    build_parser(compiler);
+    build_interpreter(compiler);
 }
 
-fn build_io(gen: &mut Generator) {
+fn build_io(compiler: &mut Compiler) {
     let tib = 0x100;
 
-    gen.define_variable_word("TIB", tib);
-    gen.define_variable_word("#TIB", 0);
-    gen.define_variable_word(">IN", 0);
+    compiler.define_variable_word("TIB", tib);
+    compiler.define_variable_word("#TIB", 0);
+    compiler.define_variable_word(">IN", 0);
 
-    gen.define_imported_word("io", "EMIT", 1, 0);
-    gen.define_imported_word("io", "TYPE", 2, 0);
+    compiler.define_imported_word("io", "EMIT", 1, 0);
+    compiler.define_imported_word("io", "TYPE", 2, 0);
 
     // below words are just meant to be called by the host
 
     // set aside N bytes of input buffer
     // ( u -- c-addr )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "RESERVE-INPUT-BUFFER",
         vec![
             // update tib length
@@ -35,25 +35,25 @@ fn build_io(gen: &mut Generator) {
     );
 }
 
-fn build_parser(gen: &mut Generator) {
+fn build_parser(compiler: &mut Compiler) {
     // is there anything to parse( -- ? )
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "PARSING?",
         vec![XT(">IN"), XT("@"), XT("#TIB"), XT("@"), XT("<>")],
     );
 
     // get the address of the head of the parse area ( -- addr )
-    gen.define_colon_word("'IN", vec![XT(">IN"), XT("@"), XT("TIB"), XT("@"), XT("+")]);
+    compiler.define_colon_word("'IN", vec![XT(">IN"), XT("@"), XT("TIB"), XT("@"), XT("+")]);
 
     // get first character in the parse area ( -- c )
-    gen.define_colon_word("IN@", vec![XT("'IN"), XT("C@")]);
+    compiler.define_colon_word("IN@", vec![XT("'IN"), XT("C@")]);
 
     // Increment the head of the parse area ( -- )
-    gen.define_colon_word("1+IN!", vec![Lit(1), XT(">IN"), XT("+!")]);
+    compiler.define_colon_word("1+IN!", vec![Lit(1), XT(">IN"), XT("+!")]);
 
     // Parse a word from the input buffer ( c -- c-addr u )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "PARSE-NAME",
         vec![
             // ignore leading chars-to-ignore
@@ -78,7 +78,7 @@ fn build_parser(gen: &mut Generator) {
 
     // Capitalize a character ( c -- C )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "UPCHAR",
         vec![
             XT("DUP"), Lit(97 /* a */), XT(">="),
@@ -88,11 +88,11 @@ fn build_parser(gen: &mut Generator) {
         ],
     );
 
-    gen.define_variable_word("BASE", 10);
+    compiler.define_variable_word("BASE", 10);
 
     // try to parse a digit ( c -- n -1 | 0 )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "?DIGIT",
         vec![
             XT("UPCHAR"), // parse hex as uppercase
@@ -122,7 +122,7 @@ fn build_parser(gen: &mut Generator) {
 
     // Try parsing a string as a number ( c-addr u -- n -1 | 0 )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "?NUMBER",
         vec![
             XT("DUP"), XT("=0"),
@@ -165,16 +165,16 @@ fn build_parser(gen: &mut Generator) {
     );
 }
 
-fn build_interpreter(gen: &mut Generator) {
+fn build_interpreter(compiler: &mut Compiler) {
     // for now, store errors in here
-    gen.define_variable_word("ERROR", 0);
-    gen.define_colon_word("THROW", vec![XT("ERROR"), XT("!"), XT("STOP")]);
-    gen.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
+    compiler.define_variable_word("ERROR", 0);
+    compiler.define_colon_word("THROW", vec![XT("ERROR"), XT("!"), XT("STOP")]);
+    compiler.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
 
     // Case-insensitive string equality against a known-capital string
     // ( c-addr1 u1 C-ADDR U2 -- ? )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "STR-UPPER-EQ?",
         vec![
             XT("ROT"), XT("SWAP"), // ( c-addr1 c-addr2 u1 u2 )
@@ -203,11 +203,11 @@ fn build_interpreter(gen: &mut Generator) {
     );
 
     // Given a name token, get its length ( nt -- u )
-    gen.define_colon_word("NAME>U", vec![XT("C@"), Lit(31), XT("AND")]);
+    compiler.define_colon_word("NAME>U", vec![XT("C@"), Lit(31), XT("AND")]);
 
     // Given a name token, get the name ( nt -- c-addr u )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "NAME>STRING",
         vec![
             XT("DUP"), XT("1+"), // start of the name is 1 byte after the head
@@ -217,7 +217,7 @@ fn build_interpreter(gen: &mut Generator) {
 
     // given a name token, get the name token before it ( nt -- nt | 0 )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "NAME>BACKWORD",
         vec![
             XT("DUP"), XT("NAME>U"), // get word length
@@ -227,21 +227,21 @@ fn build_interpreter(gen: &mut Generator) {
     );
 
     // given a name token, does that token point to an immedaite word? ( nt -- ? )
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "NAME>IMMEDIATE?",
         vec![XT("C@"), Lit(128), XT("AND"), XT("<>0")],
     );
 
     // given a name token, get the execution token ( nt -- xt )
     // xt is 1 + len + 4 bytes in to the definition
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "NAME>XT",
         vec![XT("DUP"), XT("NAME>U"), XT("+"), Lit(5), XT("+")],
     );
 
     // Find the address of some word ( c-addr u -- nt | 0 )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "FIND-NAME",
         vec![
             XT("LAST-WORD"), XT("@"), // start at the end of the dictionary
@@ -265,12 +265,12 @@ fn build_interpreter(gen: &mut Generator) {
         ],
     );
 
-    gen.define_variable_word("STATE", 0);
-    gen.define_colon_word("COMPILING?", vec![XT("STATE"), XT("@")]);
+    compiler.define_variable_word("STATE", 0);
+    compiler.define_colon_word("COMPILING?", vec![XT("STATE"), XT("@")]);
 
     // append a cell to the end of the dictionary( n -- )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         ",",
         vec![
             XT("CP"), XT("@"), XT("!"), // save value at end of dictionary
@@ -280,7 +280,7 @@ fn build_interpreter(gen: &mut Generator) {
 
     // append a byte to the end of the dictionary( n -- )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "C,",
         vec![
             XT("CP"), XT("@"), XT("C!"), // save value at end of dictionary
@@ -289,17 +289,17 @@ fn build_interpreter(gen: &mut Generator) {
     );
 
     // append a compiled literal to the end of the dictionary ( n -- )
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "COMPILE-LITERAL",
         vec![XT("LIT"), XT("LIT"), XT(","), XT(",")],
     );
 
     // Perform interpretation semantics for a word ( nt -- )
-    gen.define_colon_word("INTERPRET-NAME", vec![XT("NAME>XT"), XT("EXECUTE")]);
+    compiler.define_colon_word("INTERPRET-NAME", vec![XT("NAME>XT"), XT("EXECUTE")]);
 
     // Perform compilation semantics for a word ( nt -- )
     #[rustfmt::skip]
-    gen.define_colon_word(
+    compiler.define_colon_word(
         "COMPILE-NAME",
         vec![
             XT("DUP"), XT("NAME>XT"), // get the word's XT
@@ -313,8 +313,8 @@ fn build_interpreter(gen: &mut Generator) {
 
     // execute words in a loop until the input buffer empties ( -- )
     #[rustfmt::skip]
-    gen.define_colon_word(
-        "EVALUATE",
+    compiler.define_colon_word(
+        "INTERPRET",
         vec![
             // start of loop
             Lit(32), XT("PARSE-NAME"), // parse a space-delimited word from the TIB 

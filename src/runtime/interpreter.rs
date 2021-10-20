@@ -54,7 +54,7 @@ impl InterpreterRuntime {
 
     pub fn interpret(&self, input: &str) -> Result<String> {
         self.write_input(input)?;
-        self.execute("EVALUATE")?;
+        self.execute("INTERPRET")?;
 
         // assert no errors
         self.execute("ERROR@")?;
