@@ -46,15 +46,18 @@ mod tests {
 
         interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
-        assert_eq!(interpreter.pop_string().unwrap(), "Hello");
+        interpreter.execute("TYPE").unwrap();
+        assert_eq!(interpreter.read_output().unwrap(), "Hello");
 
         interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
-        assert_eq!(interpreter.pop_string().unwrap(), "world!");
+        interpreter.execute("TYPE").unwrap();
+        assert_eq!(interpreter.read_output().unwrap(), "world!");
 
         interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
-        assert_eq!(interpreter.pop_string().unwrap(), "");
+        interpreter.execute("TYPE").unwrap();
+        assert_eq!(interpreter.read_output().unwrap(), "");
     }
 
     #[test]
@@ -86,7 +89,8 @@ mod tests {
 
         interpreter.push(dup_nt).unwrap();
         interpreter.execute("NAME>STRING").unwrap();
-        let dup_str = interpreter.pop_string().unwrap();
+        interpreter.execute("TYPE").unwrap();
+        let dup_str = interpreter.read_output().unwrap();
         assert_eq!(dup_str, "DUP");
 
         interpreter.push_string(addr1, "DOOP").unwrap();
@@ -182,9 +186,10 @@ mod tests {
     fn should_parse_while_interpreting() {
         let interpreter = build_interpreter().unwrap();
         let output = interpreter.interpret("32 PARSE-NAME ASS").unwrap();
-
         assert_eq!(output, "");
-        assert_eq!(interpreter.pop_string().unwrap(), "ASS");
+
+        interpreter.execute("TYPE").unwrap();
+        assert_eq!(interpreter.read_output().unwrap(), "ASS");
     }
 
     #[test]

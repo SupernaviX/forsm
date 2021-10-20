@@ -9,41 +9,13 @@ pub fn build(gen: &mut Generator) {
 
 fn build_io(gen: &mut Generator) {
     let tib = 0x100;
-    let tob = 0x200;
+
     gen.define_variable_word("TIB", tib);
     gen.define_variable_word("#TIB", 0);
     gen.define_variable_word(">IN", 0);
 
-    // make an output buffer to fake output for now
-    gen.define_variable_word("TOB", tob);
-    gen.define_variable_word("#TOB", 0);
-
-    // ( c -- )
-    #[rustfmt::skip]
-    gen.define_colon_word(
-        "EMIT",
-        vec![
-            // write to end of TOB
-            XT("TOB"), XT("@"), XT("#TOB"), XT("@"), XT("+"), XT("C!"),
-            // move the end over
-            Lit(1), XT("#TOB"), XT("+!"),
-        ],
-    );
-
-    // ( c-addr u -- )
-    #[rustfmt::skip]
-    gen.define_colon_word(
-        "TYPE",
-        vec![
-            XT("DUP"), XT("=0"), // if input is empty
-            QBranch(12),
-            XT("DROP"), XT("DROP"), XT("EXIT"), // clean up stack and exit
-            // else
-            XT("SWAP"), XT("DUP"), XT("C@"), XT("EMIT"), // emit a char
-            XT("1+"), XT("SWAP"), XT("1-"), // decrement counts
-            Branch(-64), // goto start
-        ],
-    );
+    gen.define_imported_word("io", "EMIT", 1, 0);
+    gen.define_imported_word("io", "TYPE", 2, 0);
 
     // below words are just meant to be called by the host
 
@@ -59,19 +31,6 @@ fn build_io(gen: &mut Generator) {
             Lit(0), XT(">IN"), XT("!"),
             // return tib head
             XT("TIB"), XT("@"),
-        ],
-    );
-
-    // return the "contents" of the buffer AND reset it
-    // ( -- c-addr u )
-    #[rustfmt::skip]
-    gen.define_colon_word(
-        "DUMP-OUTPUT-BUFFER",
-        vec![
-            // get c-addr u onto the stack
-            XT("TOB"), XT("@"), XT("#TOB"), XT("@"),
-            // clear the buffer
-            Lit(0), XT("#TOB"), XT("!"),
         ],
     );
 }

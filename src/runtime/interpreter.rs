@@ -1,18 +1,46 @@
-use std::{cell::Cell, fs, str};
+use std::{
+    cell::Cell,
+    fs, str,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{anyhow, Result};
-use wasmer::imports;
+use wasmer::{imports, Function, ImportObject, LazyInit, Memory, Store, WasmerEnv};
 
 use super::Runtime;
 
 pub struct InterpreterRuntime {
     runtime: Runtime,
+    stdout: Arc<Mutex<Vec<u8>>>,
+}
+
+#[derive(WasmerEnv, Clone)]
+struct InterpreterEnv {
+    stdout: Arc<Mutex<Vec<u8>>>,
+    #[wasmer(export(name = "memory"))]
+    memory: LazyInit<Memory>,
+}
+impl InterpreterEnv {
+    pub fn read_bytes(&self, start: i32, len: i32) -> Result<Vec<u8>> {
+        let start = start as usize;
+        let end = start + len as usize;
+
+        let view = &self.memory.get_ref().unwrap().view()[start..end];
+        Ok(view.iter().map(Cell::get).collect())
+    }
 }
 
 impl InterpreterRuntime {
     pub fn new(binary: &[u8]) -> Result<Self> {
-        let runtime = Runtime::new(binary, |_| imports! {})?;
-        Ok(Self { runtime })
+        let stdout = Arc::new(Mutex::new(vec![]));
+        let env = InterpreterEnv {
+            stdout: Arc::clone(&stdout),
+            memory: Default::default(),
+        };
+        let runtime = Runtime::new(binary, |store| {
+            InterpreterRuntime::build_imports(store, env)
+        })?;
+        Ok(Self { runtime, stdout })
     }
 
     pub fn run_file(&self, filename: &str) -> Result<String> {
@@ -49,10 +77,10 @@ impl InterpreterRuntime {
     }
 
     pub fn read_output(&self) -> Result<String> {
-        // ask the program to dump output
-        self.execute("DUMP-OUTPUT-BUFFER")?;
-        // and just pop off
-        self.pop_string()
+        let mut stdout = self.stdout.lock().unwrap();
+        let result = str::from_utf8(&stdout)?.to_owned();
+        stdout.clear();
+        Ok(result)
     }
 
     pub fn push(&self, value: i32) -> Result<()> {
@@ -70,12 +98,6 @@ impl InterpreterRuntime {
         Ok(())
     }
 
-    pub fn pop_string(&self) -> Result<String> {
-        let len = self.pop()?;
-        let start = self.pop()?;
-        self.get_string(start, len)
-    }
-
     pub fn execute(&self, word: &str) -> Result<()> {
         self.runtime.execute(word)
     }
@@ -91,12 +113,24 @@ impl InterpreterRuntime {
         Ok(())
     }
 
-    fn get_string(&self, start: i32, len: i32) -> Result<String> {
-        let start = start as usize;
-        let end = start + len as usize;
-
-        let view = &self.runtime.memory()?[start..end];
-        let result_bytes: Vec<u8> = view.iter().map(Cell::get).collect();
-        Ok(str::from_utf8(&result_bytes)?.to_owned())
+    fn build_imports(store: &Store, env: InterpreterEnv) -> ImportObject {
+        let emit =
+            Function::new_native_with_env(store, env.clone(), |env: &InterpreterEnv, char: i32| {
+                env.stdout.lock().unwrap().push(char as u8);
+            });
+        let type_ = Function::new_native_with_env(
+            store,
+            env,
+            |env: &InterpreterEnv, start: i32, len: i32| {
+                let bytes = env.read_bytes(start, len).unwrap();
+                env.stdout.lock().unwrap().extend(bytes);
+            },
+        );
+        imports! {
+            "io" => {
+                "emit" => emit,
+                "type" => type_,
+            }
+        }
     }
 }
