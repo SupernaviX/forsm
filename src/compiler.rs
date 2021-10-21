@@ -862,10 +862,10 @@ impl Default for Compiler {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use wasmer::{Function, ImportObject, Store, imports};
+    use wasmer::{imports, Function, ImportObject, Store};
 
+    use super::{ColonValue::*, Compiler};
     use crate::runtime::Runtime;
-    use super::{Compiler, ColonValue::*};
 
     fn build<T>(func: T) -> Result<Runtime>
     where
@@ -873,7 +873,7 @@ mod tests {
     {
         build_with_imports(func, |_| imports! {})
     }
-    
+
     fn build_with_imports<T, F>(func: T, imports: F) -> Result<Runtime>
     where
         T: FnOnce(&mut Compiler),
@@ -884,7 +884,7 @@ mod tests {
         let binary = compiler.compile()?;
         Runtime::new(&binary, imports)
     }
-    
+
     #[test]
     fn should_manipulate_stack() {
         let runtime = build(|_| {}).unwrap();

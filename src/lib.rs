@@ -1,6 +1,6 @@
 mod assembler;
-mod compiler;
 mod bootstrapped_interpreter;
+mod compiler;
 mod runtime;
 
 use anyhow::Result;
@@ -23,17 +23,14 @@ mod tests {
         let interpreter = build_interpreter().unwrap();
         interpreter.write_input("Hello world!").unwrap();
 
-        interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
         interpreter.execute("TYPE").unwrap();
         assert_eq!(interpreter.read_output().unwrap(), "Hello");
 
-        interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
         interpreter.execute("TYPE").unwrap();
         assert_eq!(interpreter.read_output().unwrap(), "world!");
 
-        interpreter.push(' ' as i32).unwrap();
         interpreter.execute("PARSE-NAME").unwrap();
         interpreter.execute("TYPE").unwrap();
         assert_eq!(interpreter.read_output().unwrap(), "");
@@ -164,7 +161,7 @@ mod tests {
     #[test]
     fn should_parse_while_interpreting() {
         let interpreter = build_interpreter().unwrap();
-        let output = interpreter.interpret("32 PARSE-NAME ASS").unwrap();
+        let output = interpreter.interpret("PARSE-NAME ASS").unwrap();
         assert_eq!(output, "");
 
         interpreter.execute("TYPE").unwrap();
@@ -183,8 +180,7 @@ mod tests {
     #[test]
     fn should_type_output() {
         let interpreter = build_interpreter().unwrap();
-        let output = interpreter.interpret("32 parse-name k3wl! type").unwrap();
+        let output = interpreter.interpret("parse-name k3wl! type").unwrap();
         assert_eq!(output, "k3wl!");
     }
-
 }

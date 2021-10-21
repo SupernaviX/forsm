@@ -51,20 +51,14 @@ fn build_parser(compiler: &mut Compiler) {
     // Increment the head of the parse area ( -- )
     compiler.define_colon_word("1+IN!", vec![Lit(1), XT(">IN"), XT("+!")]);
 
-    // Parse a word from the input buffer ( c -- c-addr u )
+    // Parse from the input buffer until we see a delimiter ( c -- c-addr u )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "PARSE-NAME",
+        "PARSE",
         vec![
-            // ignore leading chars-to-ignore
-            XT("PARSING?"),
-            XT("OVER"), XT("IN@"), XT("="),
-            XT("AND"), QBranch(12),
-            XT("1+IN!"),
-            Branch(-40),
-            // we are at the head of our word! get it on the stack
+            // store the current parse location on the stack, it's word start
             XT("'IN"), XT("SWAP"),
-            // keep parsing until we DO see chars-to-ignore or we're done
+            // parse until we see char-to-ignore or we're done
             XT("PARSING?"),
             XT("OVER"), XT("IN@"), XT("<>"),
             XT("AND"), QBranch(12),
@@ -73,6 +67,22 @@ fn build_parser(compiler: &mut Compiler) {
             // Get char-to-ignore off the stack, put len on instead
             XT("DROP"),
             XT("DUP"), XT("'IN"), XT("SWAP"), XT("-")
+        ]
+    );
+
+    // Parse a word from the input buffer ( -- c-addr u )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "PARSE-NAME",
+        vec![
+            // ignore leading spaces
+            XT("PARSING?"),
+            Lit(32), XT("IN@"), XT("="),
+            XT("AND"), QBranch(12),
+            XT("1+IN!"),
+            Branch(-44),
+            // we are at the head of our word! parse the rest normally
+            Lit(32), XT("PARSE"),
         ],
     );
 
@@ -317,7 +327,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         "INTERPRET",
         vec![
             // start of loop
-            Lit(32), XT("PARSE-NAME"), // parse a space-delimited word from the TIB 
+            XT("PARSE-NAME"), // parse a space-delimited word from the TIB 
 
             XT("DUP"), XT("=0"),
             QBranch(12), // if the word is 0-length, we're done!
@@ -344,7 +354,7 @@ fn build_interpreter(compiler: &mut Compiler) {
             Branch(12), // if not, error and exit
             Lit(-1), XT("THROW"),
 
-            Branch(-172), // end of loop
+            Branch(-164), // end of loop
         ],
     );
 }

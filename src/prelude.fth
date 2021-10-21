@@ -1,35 +1,33 @@
 16 BASE !
-20 parse-name Woo type 20 emit 20 parse-name hoo! type 0a emit
+parse-name Woo type 20 emit parse-name hoo! type 0a emit
 0a BASE !
 110 EMIT 105 emit 99 emit 101 emit
 
--1 PARSE-NAME \ Define ' to make manual compilation easier
--1 PARSE-NAME \ ' DUP puts the XT of the word DUP on the stack. v useful for compilation
--1 PARSE-NAME \ Manually compiling : ' BL PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN NAME>XT ;
+-1 PARSE \ Define ' to make manual compilation easier
+-1 PARSE \ ' DUP puts the XT of the word DUP on the stack. v useful for compilation
+-1 PARSE \ Manually compiling : ' PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN NAME>XT ;
 DROP DROP DROP DROP DROP DROP
 1 C,
 39 C,
 LAST-WORD @ ,
 CP @ 6 - LAST-WORD !
 (DOCOL) ,
-32 PARSE-NAME LIT FIND-NAME NAME>XT ,
-32 ,
-32 PARSE-NAME PARSE-NAME FIND-NAME NAME>XT ,
-32 PARSE-NAME FIND-NAME FIND-NAME NAME>XT ,
-32 PARSE-NAME DUP FIND-NAME NAME>XT ,
-32 PARSE-NAME =0 FIND-NAME NAME>XT ,
-32 PARSE-NAME ?BRANCH FIND-NAME NAME>XT ,
+PARSE-NAME PARSE-NAME FIND-NAME NAME>XT ,
+PARSE-NAME FIND-NAME FIND-NAME NAME>XT ,
+PARSE-NAME DUP FIND-NAME NAME>XT ,
+PARSE-NAME =0 FIND-NAME NAME>XT ,
+PARSE-NAME ?BRANCH FIND-NAME NAME>XT ,
 CP @ 0 ,
-32 PARSE-NAME LIT FIND-NAME NAME>XT ,
+PARSE-NAME LIT FIND-NAME NAME>XT ,
 -2 ,
-32 PARSE-NAME THROW FIND-NAME NAME>XT ,
+PARSE-NAME THROW FIND-NAME NAME>XT ,
 CP @ SWAP !
-32 PARSE-NAME NAME>XT FIND-NAME NAME>XT ,
-32 PARSE-NAME EXIT FIND-NAME NAME>XT ,
+PARSE-NAME NAME>XT FIND-NAME NAME>XT ,
+PARSE-NAME EXIT FIND-NAME NAME>XT ,
 
--1 PARSE-NAME \ Now I can just write "' DUP ," to compile DUP into a def, without this verbose mess.
--1 PARSE-NAME \ Real comments sound useful, adding those next. Comments use the same trick I'm doing manually here;
--1 PARSE-NAME \ parse input until you find a nonexistent character, then throw out the string you've parsed.
+-1 PARSE \ Now I can just write "' DUP ," to compile DUP into a def, without this verbose mess.
+-1 PARSE \ Real comments sound useful, adding those next. Comments use the same trick I'm doing manually here;
+-1 PARSE \ parse input until you find a nonexistent character, then throw out the string you've parsed.
 DROP DROP DROP DROP DROP DROP
 
 129 C,
@@ -37,7 +35,7 @@ DROP DROP DROP DROP DROP DROP
 LAST-WORD @ ,
 CP @ 6 - LAST-WORD !
 (DOCOL) ,
-' LIT , -1 , ' PARSE-NAME , ' DROP , ' DROP ,
+' LIT , -1 , ' PARSE , ' DROP , ' DROP ,
 ' EXIT ,
 
 \ Now I can write comments like this!
@@ -52,9 +50,9 @@ CP @ 6 - LAST-WORD ! \ Update the var pointing to the most recently-defined word
 \ The actual "body" of the definition begins now!
 ' LIT , \ Add a literal value to the word. This compilex the execution token (XT) of LIT into the definition. At interpretation time, that gets run.
 41 , \ the literal value of ascii ) . The LIT word will return this value at interpretation time.
-' PARSE-NAME , \ Read from input (this file) until we find that character.
-' DROP , ' DROP , \ PARSE-NAME returns a string, but we don't need it so we can throw it out
-' LIT , 32 , ' PARSE-NAME , ' DROP , ' DROP , \ and do the same to consume the next space-delimited word, which IS the )
+' PARSE , \ Read from input (this file) until we find that character.
+' DROP , ' DROP , \ PARSE returns a string, but we don't need it so we can throw it out
+' PARSE-NAME , ' DROP , ' DROP , \ and consume the next space-delimited word, which IS the )
 ' EXIT , \ Finally, return from the colon definition.
 
 10 EMIT 67 EMIT 79 EMIT ( Now I can add inline comments! ) 79 EMIT 76 EMIT
@@ -67,7 +65,7 @@ LAST-WORD @ ,
 CP @ 11 - LAST-WORD !
 (DOCOL) ,
 ' CP , ' @ ,                \ Keep a pointer to the def's head on the stack
-' LIT , 32 , ' PARSE-NAME , \ CREATE reads the name of a new definition from input
+' PARSE-NAME ,              \ CREATE reads the name of a new definition from input
 ' DUP , ' C, ,              \ Save the length of the name in the dictionary
 CP @                        \ This is the start of a loop. Pushing CP onto the stack to track where to jump back to later
 ' DUP , ' <>0 ,             \ If we're still parsing the word
@@ -176,7 +174,7 @@ IMMEDIATE
 
 \ POSTPONE parses a word, and compiles its compilation semantics into the current word
 : POSTPONE ( "ccc" -- )
-  bl parse-name find-name dup =0 if -1 throw then \ Find the nt for the next word, throw if we cna't
+  parse-name find-name dup =0 if -1 throw then \ Find the nt for the next word, throw if we can't
   dup name>immediate?
     if    name>xt , \ compile this XT into the def
     else  ['] lit , name>xt , ['] , , \ compile "compile this XT" into the def
