@@ -14,6 +14,8 @@ fn build_io(compiler: &mut Compiler) {
     compiler.define_variable_word("#TIB", 0);
     compiler.define_variable_word(">IN", 0);
 
+    compiler.define_variable_word("BLK", 0);
+
     compiler.define_imported_word("io", "EMIT", 1, 0);
     compiler.define_imported_word("io", "TYPE", 2, 0);
 
@@ -288,7 +290,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         ],
     );
 
-    // append a byte to the end of the dictionary( n -- )
+    // append a byte to the end of the dictionary ( n -- )
     #[rustfmt::skip]
     compiler.define_colon_word(
         "C,",

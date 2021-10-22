@@ -674,6 +674,7 @@ impl Compiler {
 
         self.define_native_word("AND", 0, binary_i32(I32And));
         self.define_native_word("OR", 0, binary_i32(I32Or));
+        self.define_native_word("XOR", 0, binary_i32(I32Xor));
 
         self.define_constant_word("FALSE", 0);
         self.define_constant_word("TRUE", -1);
