@@ -90,10 +90,9 @@ impl Compiler {
         results: usize,
     ) {
         // Define an imported with the given signature, but a lowercase name
-        let field = name.to_ascii_lowercase();
         let func = self.assembler.add_imported_func(
             module.to_owned(),
-            field,
+            name.to_owned(),
             vec![ValueType::I32; params],
             vec![ValueType::I32; results],
         );
@@ -1138,16 +1137,16 @@ mod tests {
     fn should_support_imports() {
         let runtime = build_with_imports(
             |compiler| {
-                compiler.define_imported_word("test", "SEVENTEEN", 0, 2);
-                compiler.define_imported_word("test", "SWALLOW", 2, 0);
-                compiler.define_imported_word("test", "TRIM", 2, 2);
+                compiler.define_imported_word("TEST", "SEVENTEEN", 0, 2);
+                compiler.define_imported_word("TEST", "SWALLOW", 2, 0);
+                compiler.define_imported_word("TEST", "TRIM", 2, 2);
             },
             |store| {
                 imports! {
-                    "test" => {
-                        "seventeen" => Function::new_native(store, || (10, 7)),
-                        "swallow" => Function::new_native(store, |_: i32, _: i32| {}),
-                        "trim" => Function::new_native(store, |a: i32, b: i32| {
+                    "TEST" => {
+                        "SEVENTEEN" => Function::new_native(store, || (10, 7)),
+                        "SWALLOW" => Function::new_native(store, |_: i32, _: i32| {}),
+                        "TRIM" => Function::new_native(store, |a: i32, b: i32| {
                             (a + 4, b - 8)
                         }),
                     }

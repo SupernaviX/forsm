@@ -8,44 +8,57 @@ pub fn build(compiler: &mut Compiler) {
 }
 
 fn build_io(compiler: &mut Compiler) {
-    let tib = 0x100;
-
-    compiler.define_variable_word("TIB", tib);
-    compiler.define_variable_word("#TIB", 0);
     compiler.define_variable_word(">IN", 0);
 
     compiler.define_variable_word("BLK", 0);
 
-    compiler.define_imported_word("io", "EMIT", 1, 0);
-    compiler.define_imported_word("io", "TYPE", 2, 0);
+    compiler.define_constant_word("LOAD-BLOCK-BUFFER", 0x100);
+    compiler.define_constant_word("#BLOCK-BUFFER", 0x400);
 
-    // below words are just meant to be called by the host
+    // read the contents of block n into the given address ( n c-addr -- )
+    compiler.define_imported_word("IO", "READ-BLOCK", 2, 0);
+    // output a single character to stdout ( c -- )
+    compiler.define_imported_word("IO", "EMIT", 1, 0);
+    // output a string to stdout ( c-addr u -- )
+    compiler.define_imported_word("IO", "TYPE", 2, 0);
 
-    // set aside N bytes of input buffer
-    // ( u -- c-addr )
+    // load code into a block
+    // ( n -- )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "RESERVE-INPUT-BUFFER",
+        "(LOAD)",
         vec![
-            // update tib length
-            XT("#TIB"), XT("!"),
-            // and the input pointer
+            // reset the input pointer
             Lit(0), XT(">IN"), XT("!"),
-            // return tib head
-            XT("TIB"), XT("@"),
+            // update the BLK pointer
+            XT("DUP"), XT("BLK"), XT("!"),
+            // load the block
+            XT("LOAD-BLOCK-BUFFER"), XT("READ-BLOCK"),
         ],
     );
 }
 
 fn build_parser(compiler: &mut Compiler) {
-    // is there anything to parse( -- ? )
+    compiler.define_variable_word("SOURCE-BUFFER", 0x100);
+    compiler.define_variable_word("#SOURCE", 0x400);
+
+    // current address and length of the input buffer ( -- c-addr u )
+    compiler.define_colon_word(
+        "SOURCE",
+        vec![XT("SOURCE-BUFFER"), XT("@"), XT("#SOURCE"), XT("@")],
+    );
+
+    // is there anything to parse ( -- ? )
     compiler.define_colon_word(
         "PARSING?",
-        vec![XT(">IN"), XT("@"), XT("#TIB"), XT("@"), XT("<>")],
+        vec![XT(">IN"), XT("@"), XT("SOURCE"), XT("NIP"), XT("<>")],
     );
 
     // get the address of the head of the parse area ( -- addr )
-    compiler.define_colon_word("'IN", vec![XT(">IN"), XT("@"), XT("TIB"), XT("@"), XT("+")]);
+    compiler.define_colon_word(
+        "'IN",
+        vec![XT(">IN"), XT("@"), XT("SOURCE"), XT("DROP"), XT("+")],
+    );
 
     // get first character in the parse area ( -- c )
     compiler.define_colon_word("IN@", vec![XT("'IN"), XT("C@")]);
@@ -329,7 +342,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         "INTERPRET",
         vec![
             // start of loop
-            XT("PARSE-NAME"), // parse a space-delimited word from the TIB 
+            XT("PARSE-NAME"), // parse a space-delimited word from input
 
             XT("DUP"), XT("=0"),
             QBranch(12), // if the word is 0-length, we're done!

@@ -1,5 +1,5 @@
 use std::{
-    cell::Cell,
+    collections::HashMap,
     fs, str,
     sync::{Arc, Mutex},
 };
@@ -9,38 +9,77 @@ use wasmer::{imports, Function, ImportObject, LazyInit, Memory, Store, WasmerEnv
 
 use super::Runtime;
 
+type Block = Box<[u8; 1024]>;
 pub struct InterpreterRuntime {
     runtime: Runtime,
+    blocks: Arc<Mutex<HashMap<i32, Block>>>,
     stdout: Arc<Mutex<Vec<u8>>>,
 }
 
 #[derive(WasmerEnv, Clone)]
-struct InterpreterEnv {
+struct ForthEnv {
+    blocks: Arc<Mutex<HashMap<i32, Block>>>,
     stdout: Arc<Mutex<Vec<u8>>>,
     #[wasmer(export(name = "memory"))]
     memory: LazyInit<Memory>,
 }
-impl InterpreterEnv {
-    pub fn read_bytes(&self, start: i32, len: i32) -> Result<Vec<u8>> {
-        let start = start as usize;
-        let end = start + len as usize;
+impl ForthEnv {
+    pub fn read_block(&self, block: i32, address: i32) {
+        let mut blocks = self.blocks.lock().unwrap();
+        let block = blocks
+            .entry(block)
+            .or_insert_with(|| Box::new([b' '; 1024]));
+        self.write_bytes(address, block.as_ref());
+    }
+    pub fn emit(&self, char: i32) {
+        self.stdout.lock().unwrap().push(char as u8);
+    }
+    pub fn type_(&self, start: i32, len: i32) {
+        let bytes = self.read_bytes(start, len);
+        self.stdout.lock().unwrap().extend(bytes);
+    }
 
-        let view = &self.memory.get_ref().unwrap().view()[start..end];
-        Ok(view.iter().map(Cell::get).collect())
+    fn read_bytes(&self, start: i32, len: i32) -> Vec<u8> {
+        let start = start as usize;
+        let len = len as usize;
+        let memory = self.memory_ref().unwrap();
+
+        unsafe {
+            let ptr = memory.data_ptr().add(start);
+            let slice = std::slice::from_raw_parts(ptr, len);
+            slice.to_vec()
+        }
+    }
+    fn write_bytes(&self, start: i32, bytes: &[u8]) {
+        let start = start as usize;
+        let len = bytes.len();
+        let memory = self.memory_ref().unwrap();
+
+        unsafe {
+            let ptr = memory.data_ptr().add(start);
+            let slice = std::slice::from_raw_parts_mut(ptr, len);
+            slice.copy_from_slice(bytes);
+        }
     }
 }
 
 impl InterpreterRuntime {
     pub fn new(binary: &[u8]) -> Result<Self> {
+        let blocks = Arc::new(Mutex::new(HashMap::new()));
         let stdout = Arc::new(Mutex::new(vec![]));
-        let env = InterpreterEnv {
+        let env = ForthEnv {
+            blocks: Arc::clone(&blocks),
             stdout: Arc::clone(&stdout),
             memory: Default::default(),
         };
         let runtime = Runtime::new(binary, |store| {
             InterpreterRuntime::build_imports(store, env)
         })?;
-        Ok(Self { runtime, stdout })
+        Ok(Self {
+            blocks,
+            stdout,
+            runtime,
+        })
     }
 
     pub fn run_file(&self, filename: &str) -> Result<String> {
@@ -66,14 +105,17 @@ impl InterpreterRuntime {
     }
 
     pub fn write_input(&self, input: &str) -> Result<()> {
-        // request N bytes of space
-        self.push(input.len() as i32)?;
-        self.execute("RESERVE-INPUT-BUFFER")?;
-        // address to write to is now on the stack
-        let start = self.pop()?;
-        self.set_string(start, input)?;
-
-        Ok(())
+        assert!(input.len() <= 1024);
+        // store the input in block 1
+        {
+            let mut blocks = self.blocks.lock().unwrap();
+            let block = blocks.entry(1).or_insert_with(|| Box::new([b' '; 1024]));
+            block[0..input.len()].copy_from_slice(input.as_bytes());
+            block[input.len()..1024].iter_mut().for_each(|b| *b = b' ');
+        }
+        // now load it!
+        self.push(1)?;
+        self.execute("(LOAD)")
     }
 
     pub fn read_output(&self) -> Result<String> {
@@ -113,23 +155,15 @@ impl InterpreterRuntime {
         Ok(())
     }
 
-    fn build_imports(store: &Store, env: InterpreterEnv) -> ImportObject {
-        let emit =
-            Function::new_native_with_env(store, env.clone(), |env: &InterpreterEnv, char: i32| {
-                env.stdout.lock().unwrap().push(char as u8);
-            });
-        let type_ = Function::new_native_with_env(
-            store,
-            env,
-            |env: &InterpreterEnv, start: i32, len: i32| {
-                let bytes = env.read_bytes(start, len).unwrap();
-                env.stdout.lock().unwrap().extend(bytes);
-            },
-        );
+    fn build_imports(store: &Store, env: ForthEnv) -> ImportObject {
+        let read_block = Function::new_native_with_env(store, env.clone(), ForthEnv::read_block);
+        let emit = Function::new_native_with_env(store, env.clone(), ForthEnv::emit);
+        let type_ = Function::new_native_with_env(store, env, ForthEnv::type_);
         imports! {
-            "io" => {
-                "emit" => emit,
-                "type" => type_,
+            "IO" => {
+                "READ-BLOCK" => read_block,
+                "EMIT" => emit,
+                "TYPE" => type_,
             }
         }
     }
