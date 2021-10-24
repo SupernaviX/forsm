@@ -10,43 +10,35 @@ pub fn build(compiler: &mut Compiler) {
 fn build_io(compiler: &mut Compiler) {
     compiler.define_variable_word(">IN", 0);
 
-    compiler.define_variable_word("BLK", 0);
-
-    compiler.define_constant_word("LOAD-BLOCK-BUFFER", 0x100);
-    compiler.define_constant_word("#BLOCK-BUFFER", 0x400);
-
-    // read the contents of block n into the given address ( n c-addr -- )
-    compiler.define_imported_word("IO", "READ-BLOCK", 2, 0);
+    // read at most N bytes from stdin to the given address, stopping at a line terminator
+    // ( c-addr n1 -- n2 )
+    compiler.define_imported_word("IO", "ACCEPT", 2, 1);
     // output a single character to stdout ( c -- )
     compiler.define_imported_word("IO", "EMIT", 1, 0);
     // output a string to stdout ( c-addr u -- )
     compiler.define_imported_word("IO", "TYPE", 2, 0);
 
-    // load code into a block
-    // ( n -- )
+    compiler.define_variable_word("TIB", 0x100);
+    compiler.define_constant_word("TIB-MAX", 0x100);
+    compiler.define_variable_word("#TIB", 0);
+
+    // refill TIB from stdin, return whether stdin is empty
+    // ( -- ? )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "(LOAD)",
+        "REFILL",
         vec![
-            // reset the input pointer
-            Lit(0), XT(">IN"), XT("!"),
-            // update the BLK pointer
-            XT("DUP"), XT("BLK"), XT("!"),
-            // load the block
-            XT("LOAD-BLOCK-BUFFER"), XT("READ-BLOCK"),
+            Lit(0), XT(">IN"), XT("!"), // Reset >IN
+            XT("TIB"), XT("@"), XT("TIB-MAX"), XT("ACCEPT"), // Read a line
+            XT("DUP"), XT("#TIB"), XT("!"), // store the new length of TIB
+            XT("<>0"), // return if it's nonzero
         ],
     );
 }
 
 fn build_parser(compiler: &mut Compiler) {
-    compiler.define_variable_word("SOURCE-BUFFER", 0x100);
-    compiler.define_variable_word("#SOURCE", 0x400);
-
     // current address and length of the input buffer ( -- c-addr u )
-    compiler.define_colon_word(
-        "SOURCE",
-        vec![XT("SOURCE-BUFFER"), XT("@"), XT("#SOURCE"), XT("@")],
-    );
+    compiler.define_colon_word("SOURCE", vec![XT("TIB"), XT("@"), XT("#TIB"), XT("@")]);
 
     // is there anything to parse ( -- ? )
     compiler.define_colon_word(
@@ -372,4 +364,16 @@ fn build_interpreter(compiler: &mut Compiler) {
             Branch(-164), // end of loop
         ],
     );
+
+    // Very basic main loop
+    compiler.define_colon_word(
+        "QUIT",
+        vec![
+            XT("REFILL"),
+            QBranch(12),     // quit if we are done
+            XT("INTERPRET"), // run code
+            Branch(-24),     // Good! Now do it again
+            XT("STOP"),      // stop execution when we are done
+        ],
+    )
 }

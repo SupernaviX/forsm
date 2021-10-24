@@ -21,13 +21,7 @@ PARSE-NAME EXIT FIND-NAME NAME>XT ,
 LAST-WORD @ ,
 CP @ 6 - LAST-WORD !
 (DOCOL) ,
-' BLK , ' @ , ' <>0 ,
-' ?BRANCH , CP @ 0 ,
-' >IN , ' @ ,
-' LIT , 16 , ' + , ' LIT , 15 , ' XOR , ' >IN , ' ! ,
-' BRANCH , CP @ 0 , SWAP CP @ SWAP !
 ' LIT , -1 , ' PARSE , ' DROP , ' DROP ,
-CP @ SWAP !
 ' EXIT ,
 
 \ NOW we support comments!

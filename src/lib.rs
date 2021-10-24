@@ -22,6 +22,7 @@ mod tests {
     fn should_parse_string() {
         let interpreter = build_interpreter().unwrap();
         interpreter.write_input("Hello world!").unwrap();
+        interpreter.execute("REFILL").unwrap();
 
         interpreter.execute("PARSE-NAME").unwrap();
         interpreter.execute("TYPE").unwrap();

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs, str,
     sync::{Arc, Mutex},
 };
@@ -9,27 +8,45 @@ use wasmer::{imports, Function, ImportObject, LazyInit, Memory, Store, WasmerEnv
 
 use super::Runtime;
 
-type Block = Box<[u8; 1024]>;
 pub struct InterpreterRuntime {
-    runtime: Runtime,
-    blocks: Arc<Mutex<HashMap<i32, Block>>>,
+    stdin: Arc<Mutex<Vec<u8>>>,
     stdout: Arc<Mutex<Vec<u8>>>,
+    runtime: Runtime,
 }
 
 #[derive(WasmerEnv, Clone)]
 struct ForthEnv {
-    blocks: Arc<Mutex<HashMap<i32, Block>>>,
+    stdin: Arc<Mutex<Vec<u8>>>,
     stdout: Arc<Mutex<Vec<u8>>>,
     #[wasmer(export(name = "memory"))]
     memory: LazyInit<Memory>,
 }
 impl ForthEnv {
-    pub fn read_block(&self, block: i32, address: i32) {
-        let mut blocks = self.blocks.lock().unwrap();
-        let block = blocks
-            .entry(block)
-            .or_insert_with(|| Box::new([b' '; 1024]));
-        self.write_bytes(address, block.as_ref());
+    pub fn accept(&self, address: i32, max_len: i32) -> i32 {
+        fn is_terminator(byte: u8) -> bool {
+            byte == b'\r' || byte == b'\n'
+        }
+        let mut stdin = self.stdin.lock().unwrap();
+
+        // strip leading line terminators from stdin
+        let start = stdin
+            .iter()
+            .position(|&b| !is_terminator(b))
+            .unwrap_or_else(|| stdin.len());
+        if start > 0 {
+            stdin.drain(0..start);
+        }
+
+        // pull the next line out of the vec and write it to the buffer
+        let len = stdin
+            .iter()
+            .position(|&b| is_terminator(b))
+            .unwrap_or_else(|| stdin.len())
+            .min(max_len as usize);
+        let bytes = stdin.drain(0..len);
+        self.write_bytes(address, bytes.as_slice());
+
+        len as i32
     }
     pub fn emit(&self, char: i32) {
         self.stdout.lock().unwrap().push(char as u8);
@@ -65,10 +82,10 @@ impl ForthEnv {
 
 impl InterpreterRuntime {
     pub fn new(binary: &[u8]) -> Result<Self> {
-        let blocks = Arc::new(Mutex::new(HashMap::new()));
+        let stdin = Arc::new(Mutex::new(vec![]));
         let stdout = Arc::new(Mutex::new(vec![]));
         let env = ForthEnv {
-            blocks: Arc::clone(&blocks),
+            stdin: Arc::clone(&stdin),
             stdout: Arc::clone(&stdout),
             memory: Default::default(),
         };
@@ -76,7 +93,7 @@ impl InterpreterRuntime {
             InterpreterRuntime::build_imports(store, env)
         })?;
         Ok(Self {
-            blocks,
+            stdin,
             stdout,
             runtime,
         })
@@ -84,16 +101,12 @@ impl InterpreterRuntime {
 
     pub fn run_file(&self, filename: &str) -> Result<String> {
         let file = fs::read_to_string(filename)?;
-        let mut all_output = vec![];
-        for line in file.lines() {
-            all_output.push(self.interpret(line)?);
-        }
-        Ok(all_output.join(""))
+        self.interpret(&file)
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {
         self.write_input(input)?;
-        self.execute("INTERPRET")?;
+        self.execute("QUIT")?;
 
         // assert no errors
         self.execute("ERROR@")?;
@@ -105,17 +118,8 @@ impl InterpreterRuntime {
     }
 
     pub fn write_input(&self, input: &str) -> Result<()> {
-        assert!(input.len() <= 1024);
-        // store the input in block 1
-        {
-            let mut blocks = self.blocks.lock().unwrap();
-            let block = blocks.entry(1).or_insert_with(|| Box::new([b' '; 1024]));
-            block[0..input.len()].copy_from_slice(input.as_bytes());
-            block[input.len()..1024].iter_mut().for_each(|b| *b = b' ');
-        }
-        // now load it!
-        self.push(1)?;
-        self.execute("(LOAD)")
+        self.stdin.lock().unwrap().extend(input.as_bytes());
+        Ok(())
     }
 
     pub fn read_output(&self) -> Result<String> {
@@ -156,12 +160,12 @@ impl InterpreterRuntime {
     }
 
     fn build_imports(store: &Store, env: ForthEnv) -> ImportObject {
-        let read_block = Function::new_native_with_env(store, env.clone(), ForthEnv::read_block);
+        let accept = Function::new_native_with_env(store, env.clone(), ForthEnv::accept);
         let emit = Function::new_native_with_env(store, env.clone(), ForthEnv::emit);
         let type_ = Function::new_native_with_env(store, env, ForthEnv::type_);
         imports! {
             "IO" => {
-                "READ-BLOCK" => read_block,
+                "ACCEPT" => accept,
                 "EMIT" => emit,
                 "TYPE" => type_,
             }
