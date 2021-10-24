@@ -99,9 +99,15 @@ impl InterpreterRuntime {
         })
     }
 
-    pub fn run_file(&self, filename: &str) -> Result<String> {
-        let file = fs::read_to_string(filename)?;
-        self.interpret(&file)
+    pub fn run_directory(&self, dir: &str) -> Result<String> {
+        let entries = fs::read_dir(dir)?;
+        let mut output = vec![];
+        for entry in entries {
+            let path = entry?.path();
+            let file = fs::read_to_string(path)?;
+            output.push(self.interpret(&file)?);
+        }
+        Ok(output.join(""))
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {
