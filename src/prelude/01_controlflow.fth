@@ -4,31 +4,10 @@
 : <mark here ;
 : <resolve , ;
 
-\ compile-time literals!
-
-: ['] \ ['] DUP pushes the XT of dup onto the stack at runtime
-  ' \ get the XT
-  [ ' LIT , ' LIT , ] , \ compile LIT
-  , \ compile the XT
-; immediate
-
-: literal ( n -- ) \ [ 6 ] literal pushes 6 onto the stack at runtime
-  ['] LIT , ,
-; immediate
-
 \ Conditionals!
-: if ['] ?branch , >mark ; immediate
-: else ['] branch , >mark swap >resolve ; immediate
+: if postpone ?branch >mark ; immediate
+: else postpone branch >mark swap >resolve ; immediate
 : then >resolve ; immediate
-
-\ POSTPONE parses a word, and compiles its compilation semantics into the current word
-: POSTPONE ( "ccc" -- )
-  parse-name find-name dup =0 if -1 throw then \ Find the nt for the next word, throw if we can't
-  dup name>immediate?
-    if    name>xt , \ compile this XT into the def
-    else  ['] lit , name>xt , ['] , , \ compile "compile this XT" into the def
-    then
-  ; immediate
 
 \ Loops!
 : begin <mark ; immediate
@@ -36,12 +15,6 @@
 : again POSTPONE branch <resolve ; immediate
 : while POSTPONE ?branch >mark ; immediate
 : repeat swap POSTPONE branch <resolve >resolve ; immediate
-
-\ recursion!
-: recurse
-  last-word @ name>xt ,
-; immediate
-
 
 \ do loops!
 

@@ -272,13 +272,14 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT(">R"), XT("OVER"), XT("OVER"), // set up copies of c-addr and u
             XT("R@"), XT("NAME>STRING"), // and extract the name from the nt
             XT("STR-UPPER-EQ?"),// Are they equal?
+            XT("R@"), XT("@"), Lit(32), XT("AND"), XT("=0"), XT("AND"), // AND is the word not hidden?
 
             QBranch(24), // this IS it chief!
             XT("DROP"), XT("DROP"), // get rid of c-addr and u
             XT("R>"), XT("EXIT"), // return the address of the word
             Branch(8), // this ain't it chief
             XT("R>"), XT("NAME>BACKWORD"), // go to the previous def
-            Branch(-108), // end of loop
+            Branch(-136), // end of loop
         ],
     );
 

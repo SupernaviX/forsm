@@ -1,11 +1,14 @@
 -1 PARSE \ Define ' to make manual compilation easier
 -1 PARSE \ ' DUP puts the XT of the word DUP on the stack. v useful for compilation
--1 PARSE \ Manually compiling : ' PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN NAME>XT ;
-DROP DROP DROP DROP DROP DROP
+-1 PARSE \ Manually compiling : (') PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN ;
+-1 PARSE \ and : ' (') NAME>XT ;
+DROP DROP DROP DROP DROP DROP DROP DROP
 
 CP @
-1 C,
+3 C,
+40 C,
 39 C,
+41 C,
 LAST-WORD @ ,
 LAST-WORD !
 (DOCOL) ,
@@ -19,8 +22,17 @@ PARSE-NAME LIT FIND-NAME NAME>XT ,
 -2 ,
 PARSE-NAME THROW FIND-NAME NAME>XT ,
 CP @ SWAP !
-PARSE-NAME NAME>XT FIND-NAME NAME>XT ,
 PARSE-NAME EXIT FIND-NAME NAME>XT ,
+
+CP @
+1 C,
+39 C,
+LAST-WORD @ ,
+LAST-WORD !
+(DOCOL) ,
+(') (') NAME>XT ,
+(') NAME>XT NAME>XT ,
+(') EXIT NAME>XT ,
 
 -1 PARSE \ Now I can just write "' DUP ," to compile DUP into a def, without this verbose mess.
 -1 PARSE \ Real comments sound useful, adding those next. Comments use the same trick I'm doing manually here;
@@ -135,23 +147,52 @@ CREATE ]
 \ The word [ stops compilation, and goes back to interpreter mode.
 CREATE [
 (DOCOL) XT,
-' LIT , 0 , ' STATE , ' ! ,
-' EXIT ,
+  ' LIT , 0 , ' STATE , ' ! ,
+  ' EXIT ,
 IMMEDIATE \ THIS has to be immediate, otherwise the compiler runs forever!
 
 \ The word : starts a colon definition (hence the name)
 CREATE :
-(DOCOL) XT,
-] CREATE (DOCOL) XT, [ \ Start defining a colon definition
-' ] , \ Switch to compilation mode
-' EXIT ,
+(DOCOL) XT, ]
+  CREATE (DOCOL) XT, \ Start defining a colon definition
+  32 LAST-WORD @ +! \ mark the def as hidden
+  ] \ Switch to compilation mode
+EXIT [ 
 
 \ The word ; ends a colon definition and switches back to interpretation
 CREATE ;
 (DOCOL) XT,
 ' LIT , ' EXIT , ' , , \ Add EXIT to the end of the current definition
+' LIT , -32 , ' LAST-WORD , ' @ ,  ' +! , \ mark the def as no longer hidden
 ' [ , \ Switch to interpretation mode
 ' EXIT ,
 IMMEDIATE
 
 \ And we're done! We have colon words!
+\ Add other compilation utilities
+
+: ['] \ ['] DUP pushes the XT of dup onto the stack at runtime
+  ' \ get the XT
+  [ ' LIT , ' LIT , ] , \ compile LIT
+  , \ compile the XT
+; IMMEDIATE
+
+\ [ 6 ] literal pushes 6 onto the stack at runtime
+: LITERAL ( n -- ) 
+  ['] LIT , ,
+; IMMEDIATE
+
+\ POSTPONE parses a word, and compiles its compilation semantics into the current word
+: POSTPONE ( "ccc" -- )
+  (') DUP NAME>IMMEDIATE?
+  ?BRANCH [ HERE 0 , ]                  \ if
+  NAME>XT ,                             \ compile the XT into the def
+  BRANCH [ HERE 0 , SWAP HERE SWAP ! ]  \ else
+  ['] LIT , NAME>XT , ['] , ,           \ compile "compile the XT" into the def
+  [ HERE SWAP ! ]                       \ then
+; IMMEDIATE
+
+\ throw in recursion.
+: RECURSE
+  LAST-WORD @ NAME>XT ,
+; IMMEDIATE
