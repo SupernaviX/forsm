@@ -160,7 +160,7 @@ fn build_parser(compiler: &mut Compiler) {
             XT("SWAP"),
 
             // start loop ( n c-addr )
-            XT("DUP"), XT("C@"), XT("?DIGIT"), XT("INVERT"),
+            XT("DUP"), XT("C@"), XT("?DIGIT"), XT("=0"),
             QBranch(32), // if the next char is NOT a digit
             XT("R>"), XT("R>"), XT("DROP"), XT("DROP"), XT("DROP"), XT("DROP"), // clean the stack
             XT("FALSE"), XT("EXIT"), // and get outta here

@@ -670,6 +670,11 @@ impl Compiler {
 
         self.define_native_word("1+", 0, vec![Call(pop), I32Const(1), I32Add, Call(push)]);
         self.define_native_word("1-", 0, vec![Call(pop), I32Const(1), I32Sub, Call(push)]);
+        self.define_native_word(
+            "INVERT",
+            0,
+            vec![Call(pop), I32Const(-1), I32Xor, Call(push)],
+        );
 
         self.define_native_word("AND", 0, binary_i32(I32And));
         self.define_native_word("OR", 0, binary_i32(I32Or));
@@ -677,18 +682,6 @@ impl Compiler {
 
         self.define_constant_word("FALSE", 0);
         self.define_constant_word("TRUE", -1);
-        self.define_native_word(
-            "INVERT",
-            0,
-            vec![
-                I32Const(-1),
-                I32Const(0),
-                Call(pop),
-                I32Eqz,
-                Select,
-                Call(push),
-            ],
-        );
 
         self.define_native_word("=", 0, binary_bool(I32Eq));
         self.define_native_word("<>", 0, binary_bool(I32Ne));

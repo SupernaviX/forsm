@@ -151,21 +151,35 @@ CREATE [
   ' EXIT ,
 IMMEDIATE \ THIS has to be immediate, otherwise the compiler runs forever!
 
+\ The word HIDE hides the current definition from FIND-NAME
+CREATE HIDE
+(DOCOL) XT, ]
+  LAST-WORD @ DUP C@ 32 OR SWAP C!
+EXIT [
+
+\ The word REVEAL undoes HIDE
+CREATE REVEAL
+(DOCOL) XT, ]
+  LAST-WORD @ DUP C@ 32 INVERT AND SWAP C!
+EXIT [
+
 \ The word : starts a colon definition (hence the name)
 CREATE :
 (DOCOL) XT, ]
   CREATE (DOCOL) XT, \ Start defining a colon definition
-  32 LAST-WORD @ +! \ mark the def as hidden
+  HIDE \ mark the def as hidden
   ] \ Switch to compilation mode
 EXIT [ 
 
-\ The word ; ends a colon definition and switches back to interpretation
+\ The word ; ends a colon definition and switches back to interpretation.
+\ Just to be cheeky, let's use it while we define it
 CREATE ;
 (DOCOL) XT, ]
   LIT EXIT ,  \ Add EXIT to the end of the current definition
-  -32 LAST-WORD @ +! \ mark the def as no longer hidden
-  [ ' [ , ] \ Switch to interpretation mode
-EXIT [ IMMEDIATE
+  REVEAL      \ mark the def as no longer hidden
+  [ ' [ ,     \ switch to interpretation mode (both the def of ";" and the def being compiled)
+; IMMEDIATE   \ and call it to finish compiling it!
+
 
 \ And we're done! We have colon words!
 \ Add other compilation utilities
