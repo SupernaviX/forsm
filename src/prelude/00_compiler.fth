@@ -161,20 +161,18 @@ EXIT [
 
 \ The word ; ends a colon definition and switches back to interpretation
 CREATE ;
-(DOCOL) XT,
-' LIT , ' EXIT , ' , , \ Add EXIT to the end of the current definition
-' LIT , -32 , ' LAST-WORD , ' @ ,  ' +! , \ mark the def as no longer hidden
-' [ , \ Switch to interpretation mode
-' EXIT ,
-IMMEDIATE
+(DOCOL) XT, ]
+  LIT EXIT ,  \ Add EXIT to the end of the current definition
+  -32 LAST-WORD @ +! \ mark the def as no longer hidden
+  [ ' [ , ] \ Switch to interpretation mode
+EXIT [ IMMEDIATE
 
 \ And we're done! We have colon words!
 \ Add other compilation utilities
 
 : ['] \ ['] DUP pushes the XT of dup onto the stack at runtime
   ' \ get the XT
-  [ ' LIT , ' LIT , ] , \ compile LIT
-  , \ compile the XT
+  LIT LIT , , \ and compile in a literal for it
 ; IMMEDIATE
 
 \ [ 6 ] literal pushes 6 onto the stack at runtime
