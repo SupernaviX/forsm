@@ -9,8 +9,8 @@ CP @
 40 C,
 39 C,
 41 C,
-LAST-WORD @ ,
-LAST-WORD !
+LATEST @ ,
+LATEST !
 (DOCOL) ,
 PARSE-NAME PARSE-NAME FIND-NAME NAME>XT ,
 PARSE-NAME FIND-NAME FIND-NAME NAME>XT ,
@@ -27,8 +27,8 @@ PARSE-NAME EXIT FIND-NAME NAME>XT ,
 CP @
 1 C,
 39 C,
-LAST-WORD @ ,
-LAST-WORD !
+LATEST @ ,
+LATEST !
 (DOCOL) ,
 (') (') NAME>XT ,
 (') NAME>XT NAME>XT ,
@@ -42,8 +42,8 @@ DROP DROP DROP DROP DROP DROP
 CP @
 129 C,
 92 C,
-LAST-WORD @ ,
-LAST-WORD !
+LATEST @ ,
+LATEST !
 (DOCOL) ,
 ' LIT , -1 , ' PARSE , ' DROP , ' DROP ,
 ' EXIT ,
@@ -55,8 +55,8 @@ LAST-WORD !
 CP @ \ hold onto the head of the dictionary for later
 4 C, \ this word has a 2-character name. The word C, adds a single byte to the the dictionary.
 72 C, 69 C, 82 C, 69 C, \ ascii "HERE"
-LAST-WORD @ , \ Link to the word before this in the dict. The word , adds a cell (4 bytes) to the dictionary.
-LAST-WORD !   \ Update the dictionary now that ENOUGH of this word is defined to not break anything
+LATEST @ , \ Link to the word before this in the dict. The word , adds a cell (4 bytes) to the dictionary.
+LATEST !   \ Update the dictionary now that ENOUGH of this word is defined to not break anything
 (DOCOL) , \ Mark this as a colon definition. (DOCOL) is a native word that starts running the body of a "colon definition""
 \ The actual "body" of the definition begins now!
 ' CP ,  \ Compile the execution token (XT) of "CP" into the definition. At interpretation time, CP will get run.
@@ -69,8 +69,8 @@ LAST-WORD !   \ Update the dictionary now that ENOUGH of this word is defined to
 HERE
 129 C,  \ This word is immediate (128) and has a 1-character name (+1).
 40 C, \ ascii "("
-LAST-WORD @ ,
-LAST-WORD !
+LATEST @ ,
+LATEST !
 (DOCOL) ,
 ' LIT ,
 41 , \ ascii ")". The LIT word will return this value at interpretation time.
@@ -84,8 +84,8 @@ LAST-WORD !
 HERE
 6 C,
 67 C, 82 C, 69 C, 65 C, 84 C, 69 C, \ CREATE
-LAST-WORD @ ,
-LAST-WORD !
+LATEST @ ,
+LATEST !
 (DOCOL) ,
 ' CP , ' @ ,                \ Keep a pointer to the def's head on the stack
 ' PARSE-NAME ,              \ CREATE reads the name of a new definition from input
@@ -99,8 +99,8 @@ HERE                        \ This is the start of a loop. Pushing CP onto the s
 HERE SWAP !                 \ Fill in the target of the forward jump, now that we've reached it
 \ Looping/conditionals will be a lot easier once we've got a compiler to handle branching
  ' DROP , ' DROP ,          \ Clear the parsed name from the stack
-' LAST-WORD , ' @ , ' , ,   \ Compile the pointer to the previous word
-' LAST-WORD , ' ! ,         \ update that LAST-WORD pointer to include our new word
+' LATEST , ' @ , ' , ,      \ Compile the pointer to the previous word
+' LATEST , ' ! ,            \ update that LATEST pointer to include our new word
 ' (DOVAR) , ' , ,           \ and default to the behavior of a variable
 ' EXIT ,
 
@@ -108,8 +108,8 @@ HERE SWAP !                 \ Fill in the target of the forward jump, now that w
 \ Add a helper to set the XT of the currently-defined word
 ( xt -- )
 CREATE XT,
-(DOCOL) HERE 4 - !
-' LAST-WORD , ' @ , ' NAME>XT , ' ! ,
+(DOCOL) LATEST @ NAME>XT !
+' LATEST , ' @ , ' NAME>XT , ' ! ,
 ' EXIT ,
 
 \ Support single-cell variables ( -- )
@@ -126,8 +126,6 @@ CREATE CONSTANT
 ' , , \ and just store the input param after it on the stack (as (DOCON) wants)
 ' EXIT ,
 
-32 CONSTANT BL
-
 \ Enough manual compilation! time to build colon definitions.
 \ Define a helper to set the IMMEDIATE flag on the last-defined word.
 \ IMMEDIATE words have behavior during compilation-mode; non-IMMEDIATE words are just baked into the current def.
@@ -135,7 +133,7 @@ CREATE CONSTANT
 CREATE IMMEDIATE
 (DOCOL) XT,
 ' LIT , 128 ,
-' LAST-WORD , ' @ ,  ' +! ,
+' LATEST , ' @ ,  ' +! ,
 ' EXIT ,
 
 \ The word ] starts compilation.
@@ -154,13 +152,13 @@ IMMEDIATE \ THIS has to be immediate, otherwise the compiler runs forever!
 \ The word HIDE hides the current definition from FIND-NAME
 CREATE HIDE
 (DOCOL) XT, ]
-  LAST-WORD @ DUP C@ 32 OR SWAP C!
+  LATEST @ DUP C@ 32 OR SWAP C!
 EXIT [
 
 \ The word REVEAL undoes HIDE
 CREATE REVEAL
 (DOCOL) XT, ]
-  LAST-WORD @ DUP C@ 32 INVERT AND SWAP C!
+  LATEST @ DUP C@ 32 INVERT AND SWAP C!
 EXIT [
 
 \ The word : starts a colon definition (hence the name)
@@ -206,5 +204,5 @@ CREATE ;
 
 \ throw in recursion.
 : RECURSE
-  LAST-WORD @ NAME>XT ,
+  LATEST @ NAME>XT ,
 ; IMMEDIATE

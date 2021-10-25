@@ -27,7 +27,7 @@ pub struct Compiler {
     start: u32,
     ip: u32,
     cp: i32,
-    last_word_address: i32,
+    latest_address: i32,
     execution_tokens: HashMap<String, i32>,
 }
 
@@ -150,10 +150,10 @@ impl Compiler {
         self.define_execution();
         self.define_math();
 
-        // Define CP and LAST-WORD variables now
+        // Define CP and LATEST variables now
         // We don't have their real values yet, but other code needs to reference them
         self.define_variable_word("CP", 0);
-        self.define_variable_word("LAST-WORD", 0);
+        self.define_variable_word("LATEST", 0);
         self
     }
 
@@ -715,21 +715,21 @@ impl Compiler {
 
         // Now that we're done adding things to the dictionary,
         // set values for CP (a var containing the next address in the dictionary)
-        // and LAST-WORD (a var containing the address of the final word).
+        // and LATEST (a var containing the address of the final word).
 
         let cp_storage_address = self.get_execution_token("CP") + 4;
         let cp_bytes: Vec<u8> = self.cp.to_le_bytes().iter().copied().collect();
         self.assembler.add_data(cp_storage_address, cp_bytes);
 
-        let last_word_storage_address = self.get_execution_token("LAST-WORD") + 4;
-        let last_word_bytes = self
-            .last_word_address
+        let latest_storage_address = self.get_execution_token("LATEST") + 4;
+        let latest_bytes = self
+            .latest_address
             .to_le_bytes()
             .iter()
             .copied()
             .collect();
         self.assembler
-            .add_data(last_word_storage_address, last_word_bytes);
+            .add_data(latest_storage_address, latest_bytes);
 
         // For testing, export every word as a function-which-EXECUTEs-that-word
         let run_xt = self.get_execution_token("RUN-WORD");
@@ -771,26 +771,26 @@ impl Compiler {
     }
 
     fn define_word(&mut self, name: &str, code: u32, parameter: &[u8]) {
-        let old_last_word_address = self.last_word_address;
-        let last_word_address = self.cp;
+        let old_latest_address = self.latest_address;
+        let latest_address = self.cp;
 
         let mut data = Vec::with_capacity(1 + name.len() + 4 + 4 + parameter.len());
         data.push(name.len() as u8);
         data.extend_from_slice(name.as_bytes());
-        data.extend_from_slice(&old_last_word_address.to_le_bytes());
+        data.extend_from_slice(&old_latest_address.to_le_bytes());
         data.extend_from_slice(&code.to_le_bytes());
         data.extend_from_slice(parameter);
 
         // for testing purposes, store execution tokens for later
         self.execution_tokens.insert(
             name.to_owned(),
-            last_word_address + 1 + name.len() as i32 + 4,
+            latest_address + 1 + name.len() as i32 + 4,
         );
 
         let cp = self.cp + data.len() as i32;
         self.assembler.add_data(self.cp, data);
         self.cp = cp;
-        self.last_word_address = last_word_address;
+        self.latest_address = latest_address;
     }
 
     fn add_global(&mut self, initial_value: i32) -> u32 {
@@ -819,7 +819,7 @@ impl Default for Compiler {
             start: 0,
             ip: 0,
             cp: 0x1000,
-            last_word_address: 0,
+            latest_address: 0,
             execution_tokens: HashMap::new(),
         }
         .initialize()

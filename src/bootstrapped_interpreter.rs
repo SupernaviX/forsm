@@ -261,7 +261,7 @@ fn build_interpreter(compiler: &mut Compiler) {
     compiler.define_colon_word(
         "FIND-NAME",
         vec![
-            XT("LAST-WORD"), XT("@"), // start at the end of the dictionary
+            XT("LATEST"), XT("@"), // start at the end of the dictionary
 
             // start of loop
             XT("DUP"), XT("=0"), // if we've found null
