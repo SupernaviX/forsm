@@ -101,48 +101,40 @@ impl Compiler {
         let locals = if results == 0 { 0 } else { 1 };
         let mut instructions = vec![];
         if params > 0 {
-            // get the lowest parameter address into local 0 and onto the stack
             instructions.push(GetGlobal(self.stack));
-            if params > 1 {
-                instructions.push(I32Const((params as i32 - 1) * 4));
-                instructions.push(I32Sub);
-            }
             instructions.push(TeeLocal(0));
             // pass parameters in LIFO order, so stack effects match function signatures
             for param in 0..params {
                 if param > 0 {
                     instructions.push(GetLocal(0));
                 }
-                instructions.push(I32Load(2, param as u32 * 4));
+                instructions.push(I32Load(2, (params - 1 - param) as u32 * 4));
             }
         }
         instructions.push(Call(func));
-        if results > 0 {
-            // get the lowest result address in local 0 and on the stack
-            if params == 0 {
-                instructions.push(GetGlobal(self.stack));
-                instructions.push(I32Const(4));
-                instructions.push(I32Add);
-                instructions.push(SetLocal(0));
-            }
-            // store results in FIFO order, also so stack effects match signatures
-            for result in 0..results {
-                instructions.push(SetLocal(1));
-                instructions.push(GetLocal(0));
-                instructions.push(GetLocal(1));
-                instructions.push(I32Store(2, (results - 1 - result) as u32 * 4))
-            }
-        }
+        // If the stack size has changed, move the stack pointer appropriately
         if params != results {
-            // move the stack pointer appropriately.
-            // We already have the "lowest" address stored in local 0,
-            // just offset that by the size of results and store it
-            instructions.push(GetLocal(0));
-            if results != 1 {
-                instructions.push(I32Const((results as i32 - 1) * 4));
-                instructions.push(I32Add);
+            if params > 0 {
+                instructions.push(GetLocal(0));
+            } else {
+                instructions.push(GetGlobal(self.stack));
+            }
+            let delta = (params * 4) as i32 - (results * 4) as i32;
+            instructions.push(I32Const(delta));
+            instructions.push(I32Add);
+            if results > 0 {
+                // hold onto the new stack head so we can write results
+                instructions.push(TeeLocal(0));
             }
             instructions.push(SetGlobal(self.stack));
+        }
+        // store results in FIFO order, also so stack effects can match signatures
+        // at this point, local 0 holds the head (lowest address) of the stack
+        for result in 0..results {
+            instructions.push(SetLocal(1));
+            instructions.push(GetLocal(0));
+            instructions.push(GetLocal(1));
+            instructions.push(I32Store(2, result as u32 * 4));
         }
         self.define_native_word(name, locals, instructions);
     }
@@ -168,10 +160,10 @@ impl Compiler {
     fn define_stacks(&mut self) {
         let define_stack = |assembler: &mut Assembler, stack| {
             let push_instructions = vec![
-                // increment stack pointer
+                // decrement stack pointer
                 GetGlobal(stack),
                 I32Const(4),
-                I32Add,
+                I32Sub,
                 SetGlobal(stack),
                 // write data
                 GetGlobal(stack),
@@ -186,10 +178,10 @@ impl Compiler {
                 // read data
                 GetGlobal(stack),
                 I32Load(2, 0),
-                // decrement stack pointer
+                // increment stack pointer
                 GetGlobal(stack),
                 I32Const(4),
-                I32Sub,
+                I32Add,
                 SetGlobal(stack),
                 End,
             ];
@@ -199,13 +191,13 @@ impl Compiler {
             (push, pop)
         };
         // define the normal stack
-        let stack = self.add_global(0x00);
+        let stack = self.add_global(0xf080);
         let (push, pop) = define_stack(&mut self.assembler, stack);
         self.stack = stack;
         self.push = push;
         self.pop = pop;
         // define the return stack
-        let r_stack = self.add_global(0x80);
+        let r_stack = self.add_global(0xf000);
         let (push_r, pop_r) = define_stack(&mut self.assembler, r_stack);
         self.push_r = push_r;
         self.pop_r = pop_r;
@@ -226,10 +218,10 @@ impl Compiler {
             "DROP",
             0,
             vec![
-                // just decrement the stack pointer
+                // just increment the stack pointer
                 GetGlobal(stack),
                 I32Const(4),
-                I32Sub,
+                I32Add,
                 SetGlobal(stack),
             ],
         );
@@ -239,8 +231,6 @@ impl Compiler {
             vec![
                 // don't bother touching the stack pointer
                 GetGlobal(stack),
-                I32Const(4),
-                I32Sub,
                 TeeLocal(0),
                 GetLocal(0),
                 I32Load(2, 0),
@@ -251,30 +241,20 @@ impl Compiler {
                 I32Store(2, 4),
             ],
         );
-        self.define_native_word(
-            "OVER",
-            0,
-            vec![
-                GetGlobal(stack),
-                I32Const(4),
-                I32Sub,
-                I32Load(2, 0),
-                Call(push),
-            ],
-        );
+        self.define_native_word("OVER", 0, vec![GetGlobal(stack), I32Load(2, 4), Call(push)]);
         self.define_native_word(
             "NIP",
             0,
             vec![
                 GetGlobal(stack),
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),  // retrieve value of head
+                I32Store(2, 4), // store in head + 4
+                GetLocal(0),
                 I32Const(4),
-                I32Sub,
-                TeeLocal(0), // point to head - 4
-                GetLocal(0),
-                I32Load(2, 4),  // retrieve value of head
-                I32Store(2, 0), // store in head - 4
-                GetLocal(0),
-                SetGlobal(stack), // head -= 4
+                I32Add,
+                SetGlobal(stack), // head += 4
             ],
         );
         self.define_native_word(
@@ -290,18 +270,16 @@ impl Compiler {
                 // start moving
                 GetLocal(0),
                 GetLocal(0),
-                I32Load(2, 0),
-                I32Store(2, 4), // store [head - 4] in head
-                GetLocal(0),
-                GetLocal(1),
-                I32Store(2, 0), // store old [head] in head - 4
+                I32Load(2, 8),
+                I32Store(2, 4), // store [head + 4] in head
                 GetLocal(0),
                 GetLocal(1),
                 I32Store(2, 8), // store old [head] in head + 4
-                // and just increment the stack ptr and we're done
                 GetLocal(0),
-                I32Const(8),
-                I32Add,
+                GetLocal(1),
+                I32Store(2, 0), // store old [head] in head - 4
+                // and just save the new stack ptr and we're done
+                GetLocal(0),
                 SetGlobal(stack),
             ],
         );
@@ -311,8 +289,6 @@ impl Compiler {
             vec![
                 // spin your elements round and round
                 GetGlobal(stack),
-                I32Const(8),
-                I32Sub,
                 TeeLocal(0),
                 GetLocal(0),
                 I32Load(2, 0),
@@ -322,9 +298,9 @@ impl Compiler {
                 GetLocal(0),
                 GetLocal(0),
                 I32Load(2, 8),
-                I32Store(2, 4),
                 I32Store(2, 0),
                 I32Store(2, 8),
+                I32Store(2, 4),
             ],
         );
         self.define_native_word(
@@ -333,8 +309,6 @@ impl Compiler {
             vec![
                 // like two rots, or rot backwards
                 GetGlobal(stack),
-                I32Const(8),
-                I32Sub,
                 TeeLocal(0),
                 GetLocal(0),
                 I32Load(2, 0),
@@ -344,9 +318,9 @@ impl Compiler {
                 GetLocal(0),
                 GetLocal(0),
                 I32Load(2, 8),
+                I32Store(2, 4),
                 I32Store(2, 0),
                 I32Store(2, 8),
-                I32Store(2, 4),
             ],
         );
         self.define_native_word(">R", 0, vec![Call(pop), Call(push_r)]);
