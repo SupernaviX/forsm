@@ -722,12 +722,7 @@ impl Compiler {
         self.assembler.add_data(cp_storage_address, cp_bytes);
 
         let latest_storage_address = self.get_execution_token("LATEST") + 4;
-        let latest_bytes = self
-            .latest_address
-            .to_le_bytes()
-            .iter()
-            .copied()
-            .collect();
+        let latest_bytes = self.latest_address.to_le_bytes().iter().copied().collect();
         self.assembler
             .add_data(latest_storage_address, latest_bytes);
 
@@ -782,10 +777,8 @@ impl Compiler {
         data.extend_from_slice(parameter);
 
         // for testing purposes, store execution tokens for later
-        self.execution_tokens.insert(
-            name.to_owned(),
-            latest_address + 1 + name.len() as i32 + 4,
-        );
+        self.execution_tokens
+            .insert(name.to_owned(), latest_address + 1 + name.len() as i32 + 4);
 
         let cp = self.cp + data.len() as i32;
         self.assembler.add_data(self.cp, data);
@@ -818,7 +811,7 @@ impl Default for Compiler {
             docol: 0,
             start: 0,
             ip: 0,
-            cp: 0x1000,
+            cp: 0x4000,
             latest_address: 0,
             execution_tokens: HashMap::new(),
         }

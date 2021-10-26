@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     fs, str,
     sync::{Arc, Mutex},
 };
@@ -22,41 +23,36 @@ struct ForthEnv {
     memory: LazyInit<Memory>,
 }
 impl ForthEnv {
-    pub fn accept(&self, address: i32, max_len: i32) -> i32 {
-        fn is_terminator(byte: u8) -> bool {
-            byte == b'\r' || byte == b'\n'
-        }
+    pub fn fd_read(&self, fd: i32, iovecs_addr: u32, iovecs_len: u32, res_addr: u32) -> i32 {
+        assert_eq!(fd, 0);
+        assert_eq!(iovecs_len, 1);
+        let iovec = self.read_u32(iovecs_addr);
+        let buf = self.read_u32(iovec);
+        let len = self.read_u32(iovec + 4);
+
         let mut stdin = self.stdin.lock().unwrap();
+        let bytes_read = len.min(stdin.len() as u32);
 
-        // strip leading line terminators from stdin
-        let start = stdin
-            .iter()
-            .position(|&b| !is_terminator(b))
-            .unwrap_or_else(|| stdin.len());
-        if start > 0 {
-            stdin.drain(0..start);
-        }
+        let bytes = stdin.drain(0..bytes_read as usize);
+        self.write_bytes(buf, bytes.as_slice());
 
-        // pull the next line out of the vec and write it to the buffer
-        let len = stdin
-            .iter()
-            .position(|&b| is_terminator(b))
-            .unwrap_or_else(|| stdin.len())
-            .min(max_len as usize);
-        let bytes = stdin.drain(0..len);
-        self.write_bytes(address, bytes.as_slice());
-
-        len as i32
+        self.write_bytes(res_addr, &bytes_read.to_le_bytes());
+        0
     }
     pub fn emit(&self, char: i32) {
         self.stdout.lock().unwrap().push(char as u8);
     }
-    pub fn type_(&self, start: i32, len: i32) {
+    pub fn type_(&self, start: u32, len: u32) {
         let bytes = self.read_bytes(start, len);
         self.stdout.lock().unwrap().extend(bytes);
     }
 
-    fn read_bytes(&self, start: i32, len: i32) -> Vec<u8> {
+    fn read_u32(&self, address: u32) -> u32 {
+        let bytes = self.read_bytes(address, 4);
+        u32::from_le_bytes(bytes.try_into().unwrap())
+    }
+
+    fn read_bytes(&self, start: u32, len: u32) -> Vec<u8> {
         let start = start as usize;
         let len = len as usize;
         let memory = self.memory_ref().unwrap();
@@ -67,7 +63,7 @@ impl ForthEnv {
             slice.to_vec()
         }
     }
-    fn write_bytes(&self, start: i32, bytes: &[u8]) {
+    fn write_bytes(&self, start: u32, bytes: &[u8]) {
         let start = start as usize;
         let len = bytes.len();
         let memory = self.memory_ref().unwrap();
@@ -166,12 +162,12 @@ impl InterpreterRuntime {
     }
 
     fn build_imports(store: &Store, env: ForthEnv) -> ImportObject {
-        let accept = Function::new_native_with_env(store, env.clone(), ForthEnv::accept);
+        let fd_read = Function::new_native_with_env(store, env.clone(), ForthEnv::fd_read);
         let emit = Function::new_native_with_env(store, env.clone(), ForthEnv::emit);
         let type_ = Function::new_native_with_env(store, env, ForthEnv::type_);
         imports! {
             "IO" => {
-                "ACCEPT" => accept,
+                "FD-READ" => fd_read,
                 "EMIT" => emit,
                 "TYPE" => type_,
             }

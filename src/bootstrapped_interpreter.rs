@@ -2,6 +2,20 @@ use super::compiler::{ColonValue::*, Compiler};
 
 /* Build a very basic INTERPRET word */
 pub fn build(compiler: &mut Compiler) {
+    // for now, store errors in here
+    compiler.define_variable_word("ERROR", 0);
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "THROW",
+        vec![
+            // store it
+            XT("DUP"), XT("ERROR"), XT("!"),
+            // halt control flow iff it is nonzero
+            QBranch(4), XT("STOP"),
+        ],
+    );
+    compiler.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
+
     build_io(compiler);
     build_parser(compiler);
     build_interpreter(compiler);
@@ -10,17 +24,101 @@ pub fn build(compiler: &mut Compiler) {
 fn build_io(compiler: &mut Compiler) {
     compiler.define_variable_word(">IN", 0);
 
-    // read at most N bytes from stdin to the given address, stopping at a line terminator
-    // ( c-addr n1 -- n2 )
-    compiler.define_imported_word("IO", "ACCEPT", 2, 1);
+    // read from an FD into a vec
+    // ( fid iovec-arr iovec-len >bytes-read -- err )
+    compiler.define_imported_word("IO", "FD-READ", 4, 1);
     // output a single character to stdout ( c -- )
     compiler.define_imported_word("IO", "EMIT", 1, 0);
     // output a string to stdout ( c-addr u -- )
     compiler.define_imported_word("IO", "TYPE", 2, 0);
 
-    compiler.define_variable_word("TIB", 0x100);
-    compiler.define_constant_word("TIB-MAX", 0x100);
+    compiler.define_variable_word("TIB", 0x10);
+    compiler.define_constant_word("TIB-MAX", 0xc0);
     compiler.define_variable_word("#TIB", 0);
+
+    // and we read this many bytes at a time from files
+    compiler.define_constant_word("CHUNK-LEN", 1024);
+
+    compiler.define_constant_word("STDINBUF", 0x100);
+    compiler.define_variable_word(">STDINBUF", 0);
+    compiler.define_variable_word("#STDINBUF", 0);
+
+    // iovec is a variable, the constant is just its address
+    compiler.define_constant_word("IOVEC", 0xf8);
+    compiler.define_variable_word("IOVECS", 0xf8);
+    compiler.define_variable_word("BYTES-READ", 0);
+
+    // read all of stdin into the file buffer
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "LOAD-STDIN",
+        vec![
+            // Prepare the iovec to read 1024 bytes into stdinbuf
+            XT("STDINBUF"), XT("IOVEC"), XT("!"),
+            XT("CHUNK-LEN"), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
+            // start o' loop
+            // try to read 1024 bytes
+            Lit(0), XT("IOVECS"), Lit(1), XT("BYTES-READ"), XT("FD-READ"), XT("THROW"),
+            XT("BYTES-READ"), XT("@"), XT("CHUNK-LEN"), XT("="),
+            QBranch(20), // loop while we've read CHUNK-LEN bytes
+            XT("CHUNK-LEN"), XT("IOVEC"), XT("+!"), // start reading the next chunk
+            Branch(-76),
+            // now just compute the length (address of final write + length of final write - initial address)
+            XT("IOVEC"), XT("@"), XT("BYTES-READ"), XT("@"), XT("+"), XT("STDINBUF"), XT("-"),
+            XT("#STDINBUF"), XT("!"),
+            // oh and reset the STDINBUF pointer
+            Lit(0), XT(">STDINBUF"), XT("!"),
+        ],
+    );
+
+    compiler.define_colon_word(
+        "STDIN-EMPTY?",
+        vec![XT(">STDINBUF"), XT("@"), XT("#STDINBUF"), XT("@"), XT("=")],
+    );
+    compiler.define_colon_word(
+        "'STDIN",
+        vec![XT("STDINBUF"), XT(">STDINBUF"), XT("@"), XT("+")],
+    );
+    compiler.define_colon_word("STDIN@", vec![XT("'STDIN"), XT("C@")]);
+
+    // is this character a line terminator? ( c -- ? )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "IS-TERM?",
+        vec![
+            XT("DUP"), Lit(13), XT("="),
+            XT("SWAP"), Lit(10), XT("="), XT("OR"),
+        ],
+    );
+
+    // ( c-addr u -- n )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "ACCEPT",
+        vec![
+            // if the stdin STDINBUF is empty, reload it
+            XT("STDIN-EMPTY?"), QBranch(4), XT("LOAD-STDIN"),
+
+            XT("STDIN-EMPTY?"), XT("=0"), // while there's anything to parse
+            XT("STDIN@"), XT("IS-TERM?"), XT("AND"), // and this starts with a lineterm,
+            QBranch(24),
+            Lit(1), XT(">STDINBUF"), XT("+!"), // skip it
+            Branch(-52),
+
+            XT("DUP"), XT(">R"), // hold onto the original requested length for later
+
+            XT("DUP"), XT(">0"), // while the caller wants more
+            XT("STDIN-EMPTY?"), XT("=0"), XT("AND"), // and there's something to parse
+            XT("STDIN@"), XT("IS-TERM?"), XT("=0"), XT("AND"), // and it is not a lineterm
+            QBranch(52),
+            XT("SWAP"), XT("STDIN@"), XT("OVER"), XT("C!"), // copy the char to the buffer
+            XT("1+"), XT("SWAP"), XT("1-"), // keep incrementing the buffer
+            Lit(1), XT(">STDINBUF"), XT("+!"), // consume the char
+            Branch(-96),
+
+            XT("NIP"), XT("R>"), XT("SWAP"), XT("-"), // return the char count
+        ],
+    );
 
     // refill TIB from stdin, return whether stdin is empty
     // ( -- ? )
@@ -183,11 +281,6 @@ fn build_parser(compiler: &mut Compiler) {
 }
 
 fn build_interpreter(compiler: &mut Compiler) {
-    // for now, store errors in here
-    compiler.define_variable_word("ERROR", 0);
-    compiler.define_colon_word("THROW", vec![XT("ERROR"), XT("!"), XT("STOP")]);
-    compiler.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
-
     // Case-insensitive string equality against a known-capital string
     // ( c-addr1 u1 C-ADDR U2 -- ? )
     #[rustfmt::skip]
