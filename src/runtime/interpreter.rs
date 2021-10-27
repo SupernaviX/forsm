@@ -39,14 +39,20 @@ impl ForthEnv {
         self.write_bytes(res_addr, &bytes_read.to_le_bytes());
         0
     }
-    pub fn emit(&self, char: i32) {
-        self.stdout.lock().unwrap().push(char as u8);
-    }
-    pub fn type_(&self, start: u32, len: u32) {
-        let bytes = self.read_bytes(start, len);
-        self.stdout.lock().unwrap().extend(bytes);
-    }
+    pub fn fd_write(&self, fd: i32, ciovecs_addr: u32, ciovecs_len: u32, res_addr: u32) -> i32 {
+        assert_eq!(fd, 1);
+        assert_eq!(ciovecs_len, 1);
+        let ciovec = self.read_u32(ciovecs_addr);
+        let buf = self.read_u32(ciovec);
+        let len = self.read_u32(ciovec + 4);
+        let bytes = self.read_bytes(buf, len);
 
+        let mut stdout = self.stdout.lock().unwrap();
+        stdout.extend(&bytes);
+
+        self.write_bytes(res_addr, &len.to_le_bytes());
+        0
+    }
     fn read_u32(&self, address: u32) -> u32 {
         let bytes = self.read_bytes(address, 4);
         u32::from_le_bytes(bytes.try_into().unwrap())
@@ -163,13 +169,11 @@ impl InterpreterRuntime {
 
     fn build_imports(store: &Store, env: ForthEnv) -> ImportObject {
         let fd_read = Function::new_native_with_env(store, env.clone(), ForthEnv::fd_read);
-        let emit = Function::new_native_with_env(store, env.clone(), ForthEnv::emit);
-        let type_ = Function::new_native_with_env(store, env, ForthEnv::type_);
+        let fd_write = Function::new_native_with_env(store, env.clone(), ForthEnv::fd_write);
         imports! {
             "IO" => {
                 "FD-READ" => fd_read,
-                "EMIT" => emit,
-                "TYPE" => type_,
+                "FD-WRITE" => fd_write,
             }
         }
     }

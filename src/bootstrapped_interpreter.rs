@@ -22,30 +22,22 @@ pub fn build(compiler: &mut Compiler) {
 }
 
 fn build_io(compiler: &mut Compiler) {
-    compiler.define_variable_word(">IN", 0);
-
-    // read from an FD into a vec
+    // read from an FD into a buffer
     // ( fid iovec-arr iovec-len >bytes-read -- err )
     compiler.define_imported_word("IO", "FD-READ", 4, 1);
-    // output a single character to stdout ( c -- )
-    compiler.define_imported_word("IO", "EMIT", 1, 0);
-    // output a string to stdout ( c-addr u -- )
-    compiler.define_imported_word("IO", "TYPE", 2, 0);
-
-    compiler.define_variable_word("TIB", 0x10);
-    compiler.define_constant_word("TIB-MAX", 0xc0);
-    compiler.define_variable_word("#TIB", 0);
-
-    // and we read this many bytes at a time from files
-    compiler.define_constant_word("CHUNK-LEN", 1024);
+    // write from a buffer to an FD
+    // ( fid ciovec-arr ciovec-len >bytes-written -- err )
+    compiler.define_imported_word("IO", "FD-WRITE", 4, 1);
 
     compiler.define_constant_word("STDINBUF", 0x100);
     compiler.define_variable_word(">STDINBUF", 0);
     compiler.define_variable_word("#STDINBUF", 0);
 
-    // iovec is a variable, the constant is just its address
+    // iovec/ciovec are variables, the constants are just their addresses
     compiler.define_constant_word("IOVEC", 0xf8);
     compiler.define_variable_word("IOVECS", 0xf8);
+    compiler.define_constant_word("CIOVEC", 0xf0);
+    compiler.define_variable_word("CIOVECS", 0xf0);
 
     // read a chunk of stdin into the file buffer ( -- )
     #[rustfmt::skip]
@@ -54,7 +46,7 @@ fn build_io(compiler: &mut Compiler) {
         vec![
             // Prepare the iovec to read 1024 bytes into stdinbuf
             XT("STDINBUF"), XT("IOVEC"), XT("!"),
-            XT("CHUNK-LEN"), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
+            Lit(1024), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
             // try to read 1024 bytes
             Lit(0), XT("IOVECS"), Lit(1), XT("#STDINBUF"), XT("FD-READ"), XT("THROW"),
             // reset stdinbuf pointer
@@ -124,6 +116,42 @@ fn build_io(compiler: &mut Compiler) {
         ],
     );
 
+    // using a variable as a 1-byte buffer holding the character to EMIT
+    // also using it to hold the (ignored) result
+    compiler.define_variable_word("EMIT-BUFFER", 0);
+
+    // ( c -- )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "EMIT",
+        vec![
+            XT("EMIT-BUFFER"), XT("!"), // store the character in a buffer
+            XT("EMIT-BUFFER"), XT("CIOVEC"), XT("!"), // set up the ciovec
+            Lit(1), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
+            Lit(1), XT("CIOVECS"), Lit(1), XT("EMIT-BUFFER"), XT("FD-WRITE"), XT("THROW"),
+        ],
+    );
+
+    // ( c-addr u -- )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "TYPE",
+        vec![
+            // set up the ciovec
+            XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
+            XT("CIOVEC"), XT("!"),
+            Lit(1), XT("CIOVECS"), Lit(1), XT("EMIT-BUFFER"), XT("FD-WRITE"), XT("THROW"),
+        ],
+    );
+}
+
+fn build_parser(compiler: &mut Compiler) {
+    compiler.define_variable_word(">IN", 0);
+
+    compiler.define_variable_word("TIB", 0x10);
+    compiler.define_constant_word("TIB-MAX", 0xc0);
+    compiler.define_variable_word("#TIB", 0);
+
     // refill TIB from stdin, return whether stdin is empty
     // ( -- ? )
     #[rustfmt::skip]
@@ -136,9 +164,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("<>0"), // return if it's nonzero
         ],
     );
-}
 
-fn build_parser(compiler: &mut Compiler) {
     // current address and length of the input buffer ( -- c-addr u )
     compiler.define_colon_word("SOURCE", vec![XT("TIB"), XT("@"), XT("#TIB"), XT("@")]);
 
