@@ -46,40 +46,41 @@ fn build_io(compiler: &mut Compiler) {
     // iovec is a variable, the constant is just its address
     compiler.define_constant_word("IOVEC", 0xf8);
     compiler.define_variable_word("IOVECS", 0xf8);
-    compiler.define_variable_word("BYTES-READ", 0);
 
-    // read all of stdin into the file buffer
+    // read a chunk of stdin into the file buffer ( -- )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "LOAD-STDIN",
+        "LOAD-STDIN-CHUNK",
         vec![
             // Prepare the iovec to read 1024 bytes into stdinbuf
             XT("STDINBUF"), XT("IOVEC"), XT("!"),
             XT("CHUNK-LEN"), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
-            // start o' loop
             // try to read 1024 bytes
-            Lit(0), XT("IOVECS"), Lit(1), XT("BYTES-READ"), XT("FD-READ"), XT("THROW"),
-            XT("BYTES-READ"), XT("@"), XT("CHUNK-LEN"), XT("="),
-            QBranch(20), // loop while we've read CHUNK-LEN bytes
-            XT("CHUNK-LEN"), XT("IOVEC"), XT("+!"), // start reading the next chunk
-            Branch(-76),
-            // now just compute the length (address of final write + length of final write - initial address)
-            XT("IOVEC"), XT("@"), XT("BYTES-READ"), XT("@"), XT("+"), XT("STDINBUF"), XT("-"),
-            XT("#STDINBUF"), XT("!"),
-            // oh and reset the STDINBUF pointer
+            Lit(0), XT("IOVECS"), Lit(1), XT("#STDINBUF"), XT("FD-READ"), XT("THROW"),
+            // reset stdinbuf pointer
             Lit(0), XT(">STDINBUF"), XT("!"),
         ],
     );
 
     compiler.define_colon_word(
-        "STDIN-EMPTY?",
+        "STDINBUF-EMPTY?",
         vec![XT(">STDINBUF"), XT("@"), XT("#STDINBUF"), XT("@"), XT("=")],
     );
+
+    compiler.define_constant_word("EOF", -1);
+    // ( -- c|EOF )
+    #[rustfmt::skip]
     compiler.define_colon_word(
-        "'STDIN",
-        vec![XT("STDINBUF"), XT(">STDINBUF"), XT("@"), XT("+")],
+        "READ-STDIN-CHAR",
+        vec![
+            XT("STDINBUF-EMPTY?"), QBranch(24),
+            XT("LOAD-STDIN-CHUNK"), // read into the stdin buffer if we need to
+            XT("STDINBUF-EMPTY?"), QBranch(8),
+            XT("EOF"), XT("EXIT"), // If stdin is STILL empty after loading a chunk, it's really empty
+            XT("STDINBUF"), XT(">STDINBUF"), XT("@"), XT("+"), XT("C@"), // return the first character from the buffer
+            Lit(1), XT(">STDINBUF"), XT("+!"), // advance the buffer pointer
+        ],
     );
-    compiler.define_colon_word("STDIN@", vec![XT("'STDIN"), XT("C@")]);
 
     // is this character a line terminator? ( c -- ? )
     #[rustfmt::skip]
@@ -96,26 +97,29 @@ fn build_io(compiler: &mut Compiler) {
     compiler.define_colon_word(
         "ACCEPT",
         vec![
-            // if the stdin STDINBUF is empty, reload it
-            XT("STDIN-EMPTY?"), QBranch(4), XT("LOAD-STDIN"),
-
-            XT("STDIN-EMPTY?"), XT("=0"), // while there's anything to parse
-            XT("STDIN@"), XT("IS-TERM?"), XT("AND"), // and this starts with a lineterm,
-            QBranch(24),
-            Lit(1), XT(">STDINBUF"), XT("+!"), // skip it
-            Branch(-52),
+            XT("DUP"), XT("=0"), QBranch(20), // if someone is not asking for chars
+            XT("DROP"), XT("DROP"), Lit(0), XT("EXIT"), // return early
 
             XT("DUP"), XT(">R"), // hold onto the original requested length for later
 
-            XT("DUP"), XT(">0"), // while the caller wants more
-            XT("STDIN-EMPTY?"), XT("=0"), XT("AND"), // and there's something to parse
-            XT("STDIN@"), XT("IS-TERM?"), XT("=0"), XT("AND"), // and it is not a lineterm
-            QBranch(52),
-            XT("SWAP"), XT("STDIN@"), XT("OVER"), XT("C!"), // copy the char to the buffer
-            XT("1+"), XT("SWAP"), XT("1-"), // keep incrementing the buffer
-            Lit(1), XT(">STDINBUF"), XT("+!"), // consume the char
-            Branch(-96),
+            // start of loop ( c-addr u )
+            XT("READ-STDIN-CHAR"),
+            XT("DUP"), XT("EOF"), XT("<>"), // while we haven't hit the end of the file
+            XT("OVER"), XT("IS-TERM?"), XT("AND"), // and we're reading newlines 
+            QBranch(12),
+            XT("DROP"), // discard the character
+            Branch(-48),
 
+            // start of loop ( c-addr u c|eof )
+            XT("DUP"), XT("EOF"), XT("<>"), // while we haven't hit EOF
+            XT("OVER"), XT("IS-TERM?"), XT("=0"), XT("AND"), // and we haven't hit newlines
+            QBranch(64),
+            XT("ROT"), XT("SWAP"), XT("OVER"), XT("C!"), // write to the buffer
+            XT("1+"), XT("SWAP"), XT("1-"), // increment the buffer
+            XT("DUP"), QBranch(12), XT("READ-STDIN-CHAR"), Branch(4), XT("EOF"), // grab the next char (or EOF if we're done)
+            Branch(-100),
+
+            XT("DROP"), // drop the final newline/EOF we read
             XT("NIP"), XT("R>"), XT("SWAP"), XT("-"), // return the char count
         ],
     );

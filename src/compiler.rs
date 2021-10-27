@@ -811,7 +811,7 @@ impl Default for Compiler {
             docol: 0,
             start: 0,
             ip: 0,
-            cp: 0x4000,
+            cp: 0x1000,
             latest_address: 0,
             execution_tokens: HashMap::new(),
         }
