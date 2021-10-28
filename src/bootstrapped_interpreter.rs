@@ -117,8 +117,8 @@ fn build_io(compiler: &mut Compiler) {
     );
 
     // using a variable as a 1-byte buffer holding the character to EMIT
-    // also using it to hold the (ignored) result
     compiler.define_variable_word("EMIT-BUFFER", 0);
+    compiler.define_variable_word("BYTES-WRITTEN", 0);
 
     // ( c -- )
     #[rustfmt::skip]
@@ -128,7 +128,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("EMIT-BUFFER"), XT("!"), // store the character in a buffer
             XT("EMIT-BUFFER"), XT("CIOVEC"), XT("!"), // set up the ciovec
             Lit(1), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
-            Lit(1), XT("CIOVECS"), Lit(1), XT("EMIT-BUFFER"), XT("FD-WRITE"), XT("THROW"),
+            Lit(1), XT("CIOVECS"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
         ],
     );
 
@@ -137,10 +137,21 @@ fn build_io(compiler: &mut Compiler) {
     compiler.define_colon_word(
         "TYPE",
         vec![
-            // set up the ciovec
-            XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
-            XT("CIOVEC"), XT("!"),
-            Lit(1), XT("CIOVECS"), Lit(1), XT("EMIT-BUFFER"), XT("FD-WRITE"), XT("THROW"),
+            // store the buffer in our ciovec
+            XT("SWAP"), XT("CIOVEC"), XT("!"),
+            // start of loop
+            XT("DUP"), XT(">0"), QBranch(88), // while we have bytes to write..
+            // try to write U bytes to the file
+            XT("DUP"), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
+            Lit(1), XT("CIOVECS"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
+            XT("BYTES-WRITTEN"), XT("@"),
+            // however many bytes we write, inc the buffer by that much
+            XT("DUP"), XT("CIOVEC"), XT("+!"),
+            // subtract BYTES-WRITTEN from what's left to write
+            XT("-"),
+            // and start again
+            Branch(-104),
+            XT("DROP") // we're done! just clean up
         ],
     );
 }
