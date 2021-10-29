@@ -617,6 +617,7 @@ impl Compiler {
         self.define_native_word("+", vec![], binary_i32(I32Add));
         self.define_native_word("-", vec![], binary_i32(I32Sub));
         self.define_native_word("*", vec![], binary_i32(I32Mul));
+
         self.define_native_word(
             "NEGATE",
             vec![],
@@ -798,6 +799,29 @@ impl Compiler {
         self.define_native_word("AND", vec![], binary_i32(I32And));
         self.define_native_word("OR", vec![], binary_i32(I32Or));
         self.define_native_word("XOR", vec![], binary_i32(I32Xor));
+        self.define_native_word("LSHIFT", vec![], binary_i32(I32Shl));
+        self.define_native_word("RSHIFT", vec![], binary_i32(I32ShrU));
+
+        self.define_native_word(
+            "2*",
+            vec![],
+            vec![Call(pop), I32Const(1), I32Shl, Call(push)],
+        );
+        self.define_native_word(
+            "D2*",
+            vec![],
+            vec![Call(pop_d), I64Const(1), I64Shl, Call(push_d)],
+        );
+        self.define_native_word(
+            "2/",
+            vec![],
+            vec![Call(pop), I32Const(1), I32ShrS, Call(push)],
+        );
+        self.define_native_word(
+            "D2/",
+            vec![],
+            vec![Call(pop_d), I64Const(1), I64ShrS, Call(push_d)],
+        );
 
         self.define_constant_word("FALSE", 0);
         self.define_constant_word("TRUE", -1);
