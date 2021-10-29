@@ -260,12 +260,38 @@ impl Compiler {
             ],
         );
         self.define_native_word(
+            "2DUP",
+            vec![],
+            vec![
+                GetGlobal(stack),
+                I32Const(8),
+                I32Sub,
+                TeeLocal(0),
+                SetGlobal(stack), // reserve room for two new words
+                GetLocal(0),
+                GetLocal(0),
+                I64Load(3, 8),
+                I64Store(3, 0),
+            ],
+        );
+        self.define_native_word(
             "DROP",
             vec![],
             vec![
                 // just increment the stack pointer
                 GetGlobal(stack),
                 I32Const(4),
+                I32Add,
+                SetGlobal(stack),
+            ],
+        );
+        self.define_native_word(
+            "2DROP",
+            vec![],
+            vec![
+                // just increment the stack pointer
+                GetGlobal(stack),
+                I32Const(8),
                 I32Add,
                 SetGlobal(stack),
             ],
@@ -284,6 +310,22 @@ impl Compiler {
                 I32Load(2, 4),
                 I32Store(2, 0),
                 I32Store(2, 4),
+            ],
+        );
+        self.define_native_word(
+            "2SWAP",
+            vec![],
+            vec![
+                // don't bother touching the stack pointer
+                GetGlobal(stack),
+                TeeLocal(0),
+                GetLocal(0),
+                I64Load(3, 0),
+                GetLocal(0),
+                GetLocal(0),
+                I64Load(3, 8),
+                I64Store(3, 0),
+                I64Store(3, 8),
             ],
         );
         self.define_native_word(
@@ -652,6 +694,53 @@ impl Compiler {
             "DNEGATE",
             vec![],
             vec![I64Const(0), Call(pop_d), I64Sub, Call(push_d)],
+        );
+
+        self.define_native_word(
+            "M*",
+            vec![],
+            vec![
+                Call(pop),
+                SetLocal(0),
+                Call(pop),
+                I64ExtendSI32,
+                GetLocal(0),
+                I64ExtendSI32,
+                I64Mul,
+                Call(push_d),
+            ],
+        );
+        self.define_native_word(
+            "UM*",
+            vec![],
+            vec![
+                Call(pop),
+                SetLocal(0),
+                Call(pop),
+                I64ExtendUI32,
+                GetLocal(0),
+                I64ExtendUI32,
+                I64Mul,
+                Call(push_d),
+            ],
+        );
+
+        self.define_native_word(
+            "UM/MOD",
+            vec![ValueType::I32],
+            vec![
+                Call(pop),
+                SetLocal(1),
+                Call(pop),
+                TeeLocal(0),
+                GetLocal(1),
+                I32DivU,
+                Call(push),
+                GetLocal(0),
+                GetLocal(1),
+                I32RemS,
+                Call(push),
+            ],
         );
 
         #[rustfmt::skip]
