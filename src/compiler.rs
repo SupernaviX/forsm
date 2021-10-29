@@ -19,6 +19,8 @@ pub struct Compiler {
     stack: u32,
     push: u32,
     pop: u32,
+    push_d: u32,
+    pop_d: u32,
     push_r: u32,
     pop_r: u32,
     docon: u32,
@@ -98,7 +100,11 @@ impl Compiler {
         );
 
         // Define a native word to call the import using the stack
-        let locals = if results == 0 { 0 } else { 1 };
+        let locals = if results == 0 {
+            vec![]
+        } else {
+            vec![ValueType::I32]
+        };
         let mut instructions = vec![];
         if params > 0 {
             instructions.push(GetGlobal(self.stack));
@@ -196,6 +202,43 @@ impl Compiler {
         self.stack = stack;
         self.push = push;
         self.pop = pop;
+
+        let push_d = self.assembler.add_native_func(
+            vec![ValueType::I64],
+            vec![],
+            vec![],
+            vec![
+                // decrement stack pointer
+                GetGlobal(stack),
+                I32Const(8),
+                I32Sub,
+                SetGlobal(stack),
+                // write data
+                GetGlobal(stack),
+                GetLocal(0),
+                I64Store(3, 0),
+                End,
+            ],
+        );
+        let pop_d = self.assembler.add_native_func(
+            vec![],
+            vec![ValueType::I64],
+            vec![],
+            vec![
+                // read data
+                GetGlobal(stack),
+                I64Load(3, 0),
+                // increment stack pointer
+                GetGlobal(stack),
+                I32Const(8),
+                I32Add,
+                SetGlobal(stack),
+                End,
+            ],
+        );
+        self.push_d = push_d;
+        self.pop_d = pop_d;
+
         // define the return stack
         let r_stack = self.add_global(0xf000);
         let (push_r, pop_r) = define_stack(&mut self.assembler, r_stack);
@@ -204,9 +247,11 @@ impl Compiler {
 
         self.assembler.add_exported_func("push", push);
         self.assembler.add_exported_func("pop", pop);
+        self.assembler.add_exported_func("push_d", push_d);
+        self.assembler.add_exported_func("pop_d", pop_d);
         self.define_native_word(
             "DUP",
-            0,
+            vec![],
             vec![
                 // just push the top of the stack onto itself
                 GetGlobal(stack),
@@ -216,7 +261,7 @@ impl Compiler {
         );
         self.define_native_word(
             "DROP",
-            0,
+            vec![],
             vec![
                 // just increment the stack pointer
                 GetGlobal(stack),
@@ -227,7 +272,7 @@ impl Compiler {
         );
         self.define_native_word(
             "SWAP",
-            0,
+            vec![],
             vec![
                 // don't bother touching the stack pointer
                 GetGlobal(stack),
@@ -241,10 +286,14 @@ impl Compiler {
                 I32Store(2, 4),
             ],
         );
-        self.define_native_word("OVER", 0, vec![GetGlobal(stack), I32Load(2, 4), Call(push)]);
+        self.define_native_word(
+            "OVER",
+            vec![],
+            vec![GetGlobal(stack), I32Load(2, 4), Call(push)],
+        );
         self.define_native_word(
             "NIP",
-            0,
+            vec![],
             vec![
                 GetGlobal(stack),
                 TeeLocal(0),
@@ -259,7 +308,7 @@ impl Compiler {
         );
         self.define_native_word(
             "TUCK",
-            1,
+            vec![ValueType::I32],
             vec![
                 GetGlobal(stack),
                 I32Const(4),
@@ -285,7 +334,7 @@ impl Compiler {
         );
         self.define_native_word(
             "ROT",
-            0,
+            vec![],
             vec![
                 // spin your elements round and round
                 GetGlobal(stack),
@@ -305,7 +354,7 @@ impl Compiler {
         );
         self.define_native_word(
             "-ROT",
-            0,
+            vec![],
             vec![
                 // like two rots, or rot backwards
                 GetGlobal(stack),
@@ -323,15 +372,19 @@ impl Compiler {
                 I32Store(2, 8),
             ],
         );
-        self.define_native_word(">R", 0, vec![Call(pop), Call(push_r)]);
-        self.define_native_word("R>", 0, vec![Call(pop_r), Call(push)]);
-        self.define_native_word("R@", 0, vec![GetGlobal(r_stack), I32Load(2, 0), Call(push)]);
+        self.define_native_word(">R", vec![], vec![Call(pop), Call(push_r)]);
+        self.define_native_word("R>", vec![], vec![Call(pop_r), Call(push)]);
+        self.define_native_word(
+            "R@",
+            vec![],
+            vec![GetGlobal(r_stack), I32Load(2, 0), Call(push)],
+        );
     }
 
     fn define_constants(&mut self) {
         let push = self.push;
         let docon = self.create_native_callable(
-            0,
+            vec![],
             vec![
                 // The value of our parameter is the value of the constant, just fetch and push it
                 GetLocal(0),
@@ -347,7 +400,7 @@ impl Compiler {
         let push = self.push;
         let pop = self.pop;
         let dovar = self.create_native_callable(
-            0,
+            vec![],
             vec![
                 // the address of our parameter IS the address of the variable, just push it
                 GetLocal(0),
@@ -356,11 +409,11 @@ impl Compiler {
         );
         self.dovar = dovar;
         self.define_constant_word("(DOVAR)", dovar as i32);
-        self.define_native_word("!", 0, vec![Call(pop), Call(pop), I32Store(2, 0)]);
-        self.define_native_word("@", 0, vec![Call(pop), I32Load(2, 0), Call(push)]);
+        self.define_native_word("!", vec![], vec![Call(pop), Call(pop), I32Store(2, 0)]);
+        self.define_native_word("@", vec![], vec![Call(pop), I32Load(2, 0), Call(push)]);
         self.define_native_word(
             "+!",
-            0,
+            vec![],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -371,8 +424,8 @@ impl Compiler {
                 I32Store(2, 0),
             ],
         );
-        self.define_native_word("C!", 0, vec![Call(pop), Call(pop), I32Store8(0, 0)]);
-        self.define_native_word("C@", 0, vec![Call(pop), I32Load8U(0, 0), Call(push)]);
+        self.define_native_word("C!", vec![], vec![Call(pop), Call(pop), I32Store8(0, 0)]);
+        self.define_native_word("C@", vec![], vec![Call(pop), I32Load8U(0, 0), Call(push)]);
     }
 
     fn define_execution(&mut self) {
@@ -407,7 +460,7 @@ impl Compiler {
                 End,
             ],
         );
-        self.define_native_word("EXECUTE", 0, vec![Call(pop), Call(execute)]);
+        self.define_native_word("EXECUTE", vec![], vec![Call(pop), Call(execute)]);
 
         // Start is the interpreter's main loop, it calls EXECUTE until the program says to stop.
         // Assuming that the caller has set IP to something reasonable first.
@@ -437,11 +490,11 @@ impl Compiler {
             ],
         );
         self.start = start;
-        self.define_native_word("STOP", 0, vec![I32Const(-1), SetGlobal(stopped)]);
+        self.define_native_word("STOP", vec![], vec![I32Const(-1), SetGlobal(stopped)]);
 
         // DOCOL is how a colon word is executed. It just messes with the IP.
         let docol = self.create_native_callable(
-            0,
+            vec![],
             vec![
                 // push IP onto the return stack
                 GetGlobal(ip),
@@ -458,7 +511,7 @@ impl Compiler {
         // EXIT is how a colon word returns. It just restores the old IP.
         self.define_native_word(
             "EXIT",
-            0,
+            vec![],
             vec![
                 // Set IP to whatever's the head of the return stack
                 Call(pop_r),
@@ -467,7 +520,7 @@ impl Compiler {
         );
         self.define_native_word(
             "LIT",
-            0,
+            vec![],
             vec![
                 // The instruction pointer is pointing to LIT's XT inside of a colon definition.
                 // The value after that is a literal; push it.
@@ -484,7 +537,7 @@ impl Compiler {
         );
         self.define_native_word(
             "BRANCH",
-            0,
+            vec![],
             vec![
                 // The instruction pointer is pointing to BRANCH's XT inside of a colon definition.
                 // The value after that is a literal jump address, jump there
@@ -497,7 +550,7 @@ impl Compiler {
         );
         self.define_native_word(
             "?BRANCH",
-            0,
+            vec![],
             vec![
                 // Branch if the head of the stack is "false" (0)
                 Call(pop),
@@ -521,33 +574,87 @@ impl Compiler {
     fn define_math(&mut self) {
         let push = self.push;
         let pop = self.pop;
-        let get_two_args = vec![
-            //swap the top of the stack before calling the real ops
-            Call(pop),
-            SetLocal(0),
-            Call(pop),
-            GetLocal(0),
-        ];
+        let push_d = self.push_d;
+        let pop_d = self.pop_d;
+        let get_two_i32_args = || {
+            vec![
+                //swap the top of the stack before calling the real ops
+                Call(pop),
+                SetLocal(0),
+                Call(pop),
+                GetLocal(0),
+            ]
+        };
+        let get_two_i64_args = || {
+            vec![
+                //swap the top of the stack before calling the real ops
+                Call(pop_d),
+                SetLocal(1),
+                Call(pop_d),
+                GetLocal(1),
+            ]
+        };
         let binary_i32 = |op| {
-            let mut res = get_two_args.clone();
+            let mut res = get_two_i32_args();
             res.push(op);
             res.push(Call(push));
             res
         };
+        let binary_i64 = |op| {
+            let mut res = get_two_i64_args();
+            res.push(op);
+            res.push(Call(push_d));
+            res
+        };
         let binary_bool = |op| {
             let mut res = vec![I32Const(0)];
-            res.extend_from_slice(&get_two_args);
+            res.extend_from_slice(&get_two_i32_args());
             res.push(op);
             res.push(I32Sub);
             res.push(Call(push));
             res
         };
-        self.define_native_word("+", 0, binary_i32(I32Add));
-        self.define_native_word("-", 0, binary_i32(I32Sub));
-        self.define_native_word("*", 0, binary_i32(I32Mul));
+        self.define_native_word("+", vec![], binary_i32(I32Add));
+        self.define_native_word("-", vec![], binary_i32(I32Sub));
+        self.define_native_word("*", vec![], binary_i32(I32Mul));
+        self.define_native_word(
+            "NEGATE",
+            vec![],
+            vec![I32Const(0), Call(pop), I32Sub, Call(push)],
+        );
+        self.define_native_word(
+            "ABS",
+            vec![],
+            vec![
+                Call(pop),
+                I32Const(i32::MAX), // all bits but high bit set
+                I32And,
+                Call(push),
+            ],
+        );
+
+        self.define_native_word("S>D", vec![], vec![Call(pop), I64ExtendSI32, Call(push_d)]);
+        self.define_native_word("D>S", vec![], vec![Call(pop_d), I32WrapI64, Call(push)]);
+        self.define_native_word(
+            "M+",
+            vec![],
+            vec![Call(pop), I64ExtendSI32, Call(pop_d), I64Add, Call(push_d)],
+        );
+        self.define_native_word("D+", vec![ValueType::I64], binary_i64(I64Add));
+        self.define_native_word("D-", vec![ValueType::I64], binary_i64(I64Sub));
+        self.define_native_word(
+            "DABS",
+            vec![],
+            vec![Call(pop_d), I64Const(i64::MAX), I64And, Call(push_d)],
+        );
+        self.define_native_word(
+            "DNEGATE",
+            vec![],
+            vec![I64Const(0), Call(pop_d), I64Sub, Call(push_d)],
+        );
 
         #[rustfmt::skip]
-        self.define_native_word("/", 1, vec![
+        self.define_native_word("/", vec![ValueType::I32], vec![
             Call(pop),
             TeeLocal(1), // store dividend for later (TODO: check for divide by 0)
             Call(pop),
@@ -582,7 +689,7 @@ impl Compiler {
             Call(push),
         ]);
         #[rustfmt::skip]
-        self.define_native_word("MOD", 1, vec![
+        self.define_native_word("MOD", vec![ValueType::I32], vec![
             Call(pop),
             TeeLocal(1), // store dividend for later (TODO: check for divide by 0)
             Call(pop),
@@ -613,7 +720,7 @@ impl Compiler {
 
         self.define_native_word(
             "MIN",
-            1,
+            vec![ValueType::I32],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -628,7 +735,7 @@ impl Compiler {
         );
         self.define_native_word(
             "MAX",
-            1,
+            vec![ValueType::I32],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -641,36 +748,74 @@ impl Compiler {
                 Call(push),
             ],
         );
+        self.define_native_word(
+            "DMIN",
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop_d),
+                TeeLocal(1),
+                Call(pop_d),
+                TeeLocal(2),
+                GetLocal(1),
+                GetLocal(2),
+                I64LtS,
+                Select,
+                Call(push_d),
+            ],
+        );
+        self.define_native_word(
+            "DMAX",
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop_d),
+                TeeLocal(1),
+                Call(pop_d),
+                TeeLocal(2),
+                GetLocal(1),
+                GetLocal(2),
+                I64GtS,
+                Select,
+                Call(push_d),
+            ],
+        );
 
-        self.define_native_word("1+", 0, vec![Call(pop), I32Const(1), I32Add, Call(push)]);
-        self.define_native_word("1-", 0, vec![Call(pop), I32Const(1), I32Sub, Call(push)]);
+        self.define_native_word(
+            "1+",
+            vec![],
+            vec![Call(pop), I32Const(1), I32Add, Call(push)],
+        );
+        self.define_native_word(
+            "1-",
+            vec![],
+            vec![Call(pop), I32Const(1), I32Sub, Call(push)],
+        );
         self.define_native_word(
             "INVERT",
-            0,
+            vec![],
             vec![Call(pop), I32Const(-1), I32Xor, Call(push)],
         );
 
-        self.define_native_word("AND", 0, binary_i32(I32And));
-        self.define_native_word("OR", 0, binary_i32(I32Or));
-        self.define_native_word("XOR", 0, binary_i32(I32Xor));
+        self.define_native_word("AND", vec![], binary_i32(I32And));
+        self.define_native_word("OR", vec![], binary_i32(I32Or));
+        self.define_native_word("XOR", vec![], binary_i32(I32Xor));
 
         self.define_constant_word("FALSE", 0);
         self.define_constant_word("TRUE", -1);
 
-        self.define_native_word("=", 0, binary_bool(I32Eq));
-        self.define_native_word("<>", 0, binary_bool(I32Ne));
-        self.define_native_word("<", 0, binary_bool(I32LtS));
-        self.define_native_word(">", 0, binary_bool(I32GtS));
-        self.define_native_word("<=", 0, binary_bool(I32LeS));
-        self.define_native_word(">=", 0, binary_bool(I32GeS));
+        self.define_native_word("=", vec![], binary_bool(I32Eq));
+        self.define_native_word("<>", vec![], binary_bool(I32Ne));
+        self.define_native_word("<", vec![], binary_bool(I32LtS));
+        self.define_native_word(">", vec![], binary_bool(I32GtS));
+        self.define_native_word("<=", vec![], binary_bool(I32LeS));
+        self.define_native_word(">=", vec![], binary_bool(I32GeS));
         self.define_native_word(
             "=0",
-            0,
+            vec![],
             vec![I32Const(0), Call(pop), I32Eqz, I32Sub, Call(push)],
         );
         self.define_native_word(
             "<>0",
-            0,
+            vec![],
             vec![
                 I32Const(0),
                 Call(pop),
@@ -682,7 +827,7 @@ impl Compiler {
         );
         self.define_native_word(
             "<0",
-            0,
+            vec![],
             vec![
                 I32Const(0),
                 Call(pop),
@@ -694,7 +839,7 @@ impl Compiler {
         );
         self.define_native_word(
             ">0",
-            0,
+            vec![],
             vec![
                 I32Const(0),
                 Call(pop),
@@ -747,14 +892,22 @@ impl Compiler {
         self
     }
 
-    fn define_native_word(&mut self, name: &str, locals: usize, instructions: Vec<Instruction>) {
+    fn define_native_word(
+        &mut self,
+        name: &str,
+        locals: Vec<ValueType>,
+        instructions: Vec<Instruction>,
+    ) {
         let code = self.create_native_callable(locals, instructions);
         self.define_word(name, code, &[]);
     }
 
-    fn create_native_callable(&mut self, locals: usize, mut instructions: Vec<Instruction>) -> u32 {
+    fn create_native_callable(
+        &mut self,
+        locals: Vec<ValueType>,
+        mut instructions: Vec<Instruction>,
+    ) -> u32 {
         instructions.push(End);
-        let locals = vec![ValueType::I32; locals];
         let func =
             self.assembler
                 .add_native_func(vec![ValueType::I32], vec![], locals, instructions);
@@ -804,6 +957,8 @@ impl Default for Compiler {
             stack: 0,
             push: 0,
             pop: 0,
+            push_d: 0,
+            pop_d: 0,
             push_r: 0,
             pop_r: 0,
             docon: 0,
@@ -925,6 +1080,15 @@ mod tests {
             })
             .collect();
         assert_eq!(results, test_cases);
+    }
+
+    #[test]
+    fn should_support_double_math() {
+        let runtime = build(|_| {}).unwrap();
+        runtime.push_double(420).unwrap();
+        runtime.push_double(69).unwrap();
+        runtime.execute("D+").unwrap();
+        assert_eq!(runtime.pop_double().unwrap(), 489);
     }
 
     #[test]

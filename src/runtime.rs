@@ -29,11 +29,29 @@ impl Runtime {
         }
     }
 
+    pub fn push_double(&self, value: i64) -> Result<()> {
+        let push = self.instance.exports.get_function("push_d")?;
+        let result = push.call(&[Value::I64(value)])?;
+        match *result {
+            [] => Ok(()),
+            _ => Err(anyhow!("Unexpected output {:?}", result)),
+        }
+    }
+
     pub fn pop(&self) -> Result<i32> {
         let pop = self.instance.exports.get_function("pop")?;
         let result = pop.call(&[])?;
         match *result {
             [Value::I32(val)] => Ok(val),
+            _ => Err(anyhow!("Unexpected output {:?}", result)),
+        }
+    }
+
+    pub fn pop_double(&self) -> Result<i64> {
+        let pop = self.instance.exports.get_function("pop_d")?;
+        let result = pop.call(&[])?;
+        match *result {
+            [Value::I64(val)] => Ok(val),
             _ => Err(anyhow!("Unexpected output {:?}", result)),
         }
     }

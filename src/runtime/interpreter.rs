@@ -141,8 +141,16 @@ impl InterpreterRuntime {
         self.runtime.push(value)
     }
 
+    pub fn push_double(&self, value: i64) -> Result<()> {
+        self.runtime.push_double(value)
+    }
+
     pub fn pop(&self) -> Result<i32> {
         self.runtime.pop()
+    }
+
+    pub fn pop_double(&self) -> Result<i64> {
+        self.runtime.pop_double()
     }
 
     pub fn push_string(&self, start: i32, string: &str) -> Result<()> {
