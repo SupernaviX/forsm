@@ -738,7 +738,7 @@ impl Compiler {
                 Call(push),
                 GetLocal(0),
                 GetLocal(1),
-                I32RemS,
+                I32RemU,
                 Call(push),
             ],
         );
