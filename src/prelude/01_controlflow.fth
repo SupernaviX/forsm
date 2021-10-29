@@ -49,7 +49,7 @@ variable do-sys
   do-sys @
   postpone swap
   <mark                   
-  postpone over postpone over postpone <>
+  postpone 2dup postpone <>
   postpone ?branch >mark do-sys ! \ possible forward branch here
   postpone >r postpone >r
 ; immediate
@@ -57,9 +57,9 @@ variable do-sys
 \ end of a do loop, increment I and if we HIT the loop end we are done
 : loop ( -- )
   postpone r> postpone 1+ postpone r> ( newi target )
-  postpone over postpone over postpone = ( newi target ? )
+  postpone 2dup postpone = ( newi target ? )
   postpone ?branch <resolve 
-  postpone drop postpone drop
+  postpone 2drop
   do-sys @ >resolve-chain
   do-sys !
 ; immediate
@@ -77,14 +77,14 @@ variable do-sys
   postpone tuck postpone r@ ( newi oldi newi target )
   postpone (+done?) postpone r> postpone swap ( newi target ? )
   postpone ?branch <resolve
-  postpone drop postpone drop
+  postpone 2drop
   do-sys @ >resolve-chain
   do-sys !
 ; immediate
 
 \ exit the loop early
 : leave
-  postpone r> postpone r> postpone drop postpone drop
+  postpone r> postpone r> postpone 2drop
   postpone ?branch >mark-chain
 ; immediate
 

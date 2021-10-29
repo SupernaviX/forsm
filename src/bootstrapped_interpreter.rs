@@ -89,8 +89,8 @@ fn build_io(compiler: &mut Compiler) {
     compiler.define_colon_word(
         "ACCEPT",
         vec![
-            XT("DUP"), XT("=0"), QBranch(20), // if someone is not asking for chars
-            XT("DROP"), XT("DROP"), Lit(0), XT("EXIT"), // return early
+            XT("DUP"), XT("=0"), QBranch(16), // if someone is not asking for chars
+            XT("2DROP"), Lit(0), XT("EXIT"), // return early
 
             XT("DUP"), XT(">R"), // hold onto the original requested length for later
 
@@ -282,8 +282,8 @@ fn build_parser(compiler: &mut Compiler) {
         "?NUMBER",
         vec![
             XT("DUP"), XT("=0"),
-            QBranch(16), // if the string is empty, it's not a number
-            XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
+            QBranch(12), // if the string is empty, it's not a number
+            XT("2DROP"), XT("FALSE"), XT("EXIT"),
 
             XT("OVER"), XT("C@"), Lit(45), XT("="), // does it start with -?
             XT("DUP"), XT(">R"), // store whether it does on the return stack
@@ -291,8 +291,8 @@ fn build_parser(compiler: &mut Compiler) {
             XT("1-"), XT("SWAP"), XT("1+"), XT("SWAP"),
 
             XT("DUP"), XT("=0"),
-            QBranch(16), // if we're out of characters NOW it's also not a number
-            XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
+            QBranch(12), // if we're out of characters NOW it's also not a number
+            XT("2DROP"), XT("FALSE"), XT("EXIT"),
 
             XT("OVER"), XT("+"), XT(">R"), // store our final str-address in the return stack
             Lit(0), // store our running summation on the stack
@@ -300,15 +300,15 @@ fn build_parser(compiler: &mut Compiler) {
 
             // start loop ( n c-addr )
             XT("DUP"), XT("C@"), XT("?DIGIT"), XT("=0"),
-            QBranch(32), // if the next char is NOT a digit
-            XT("R>"), XT("R>"), XT("DROP"), XT("DROP"), XT("DROP"), XT("DROP"), // clean the stack
+            QBranch(24), // if the next char is NOT a digit
+            XT("R>"), XT("R>"), XT("2DROP"), XT("2DROP"), // clean the stack
             XT("FALSE"), XT("EXIT"), // and get outta here
             // end if
 
             XT("ROT"), XT("BASE"), XT("@"), XT("*"), XT("+"), XT("SWAP"), // add digit to running total
             XT("1+"), // increment address
             XT("DUP"), XT("R@"), XT("="), // if we're out of input,
-            QBranch(-104), // back to start of loop
+            QBranch(-96), // back to start of loop
 
             XT("DROP"), // we're done with the input string
             XT("R>"), XT("DROP"), // we're done with the target string
@@ -329,27 +329,27 @@ fn build_interpreter(compiler: &mut Compiler) {
         "STR-UPPER-EQ?",
         vec![
             XT("ROT"), XT("SWAP"), // ( c-addr1 c-addr2 u1 u2 )
-            XT("OVER"), XT("<>"), QBranch(20), // If lengths mismatch, return now
-            XT("DROP"), XT("DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
+            XT("OVER"), XT("<>"), QBranch(16), // If lengths mismatch, return now
+            XT("2DROP"), XT("DROP"), XT("FALSE"), XT("EXIT"),
             // then
 
             // stack is now ( c-addr1 c-addr2 u )
             // start of loop
-            XT("DUP"), XT("<>0"), QBranch(100), // if length is 0, break outta the loop
+            XT("DUP"), XT("<>0"), QBranch(96), // if length is 0, break outta the loop
 
             XT(">R"), // push length into return stack
             XT("OVER"), XT("C@"), XT("UPCHAR"), XT("OVER"), XT("C@"), XT("<>"), // are chars not-equal?
-            QBranch(32), // if
-            XT("R>"), XT("DROP"), XT("DROP"), XT("DROP"), //fix the stacks
+            QBranch(28), // if
+            XT("R>"), XT("2DROP"), XT("DROP"), //fix the stacks
             XT("FALSE"), XT("EXIT"), // return false
             Branch(24), // else
             XT("SWAP"), XT("1+"), XT("SWAP"), XT("1+"), // increment pointers
             XT("R>"), XT("1-"), // get the count out of the return stack and decremented
             // then
 
-            Branch(-116), // end of loop
+            Branch(-112), // end of loop
 
-            XT("DROP"), XT("DROP"), XT("DROP"), XT("TRUE"), // if we made it this far we win!
+            XT("2DROP"), XT("DROP"), XT("TRUE"), // if we made it this far we win!
         ],
     );
 
@@ -399,21 +399,21 @@ fn build_interpreter(compiler: &mut Compiler) {
 
             // start of loop
             XT("DUP"), XT("=0"), // if we've found null
-            QBranch(20), // give up
-            XT("DROP"), XT("DROP"), XT("DROP"), // flush the stack
+            QBranch(16), // give up
+            XT("2DROP"), XT("DROP"), // flush the stack
             XT("FALSE"), XT("EXIT"), // and exit with haste and falseness
 
-            XT(">R"), XT("OVER"), XT("OVER"), // set up copies of c-addr and u
+            XT(">R"), XT("2DUP"), // set up copies of c-addr and u
             XT("R@"), XT("NAME>STRING"), // and extract the name from the nt
             XT("STR-UPPER-EQ?"),// Are they equal?
             XT("R@"), XT("@"), Lit(32), XT("AND"), XT("=0"), XT("AND"), // AND is the word not hidden?
 
-            QBranch(24), // this IS it chief!
-            XT("DROP"), XT("DROP"), // get rid of c-addr and u
+            QBranch(20), // this IS it chief!
+            XT("2DROP"), // get rid of c-addr and u
             XT("R>"), XT("EXIT"), // return the address of the word
             Branch(8), // this ain't it chief
             XT("R>"), XT("NAME>BACKWORD"), // go to the previous def
-            Branch(-136), // end of loop
+            Branch(-124), // end of loop
         ],
     );
 
@@ -472,10 +472,10 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("PARSE-NAME"), // parse a space-delimited word from input
 
             XT("DUP"), XT("=0"),
-            QBranch(12), // if the word is 0-length, we're done!
-            XT("DROP"), XT("DROP"), XT("EXIT"),
+            QBranch(8), // if the word is 0-length, we're done!
+            XT("2DROP"), XT("EXIT"),
 
-            XT("OVER"), XT("OVER"), XT("FIND-NAME"), // look it up in the dictionary
+            XT("2DUP"), XT("FIND-NAME"), // look it up in the dictionary
             XT("DUP"), XT("<>0"),
 
             QBranch(44), // if we found the word in the dictionary,
@@ -496,7 +496,7 @@ fn build_interpreter(compiler: &mut Compiler) {
             Branch(12), // if not, error and exit
             Lit(-1), XT("THROW"),
 
-            Branch(-164), // end of loop
+            Branch(-156), // end of loop
         ],
     );
 

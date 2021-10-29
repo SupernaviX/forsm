@@ -2,7 +2,7 @@
 -1 PARSE \ ' DUP puts the XT of the word DUP on the stack. v useful for compilation
 -1 PARSE \ Manually compiling : (') PARSE-NAME FIND-NAME DUP =0 IF -2 THROW THEN ;
 -1 PARSE \ and : ' (') NAME>XT ;
-DROP DROP DROP DROP DROP DROP DROP DROP
+2DROP 2DROP 2DROP 2DROP
 
 CP @
 3 C,
@@ -37,7 +37,7 @@ LATEST !
 -1 PARSE \ Now I can just write "' DUP ," to compile DUP into a def, without this verbose mess.
 -1 PARSE \ Real comments sound useful, adding those next. Comments use the same trick I'm doing manually here;
 -1 PARSE \ parse input until you find a nonexistent character, then throw out the string you've parsed.
-DROP DROP DROP DROP DROP DROP
+2DROP 2DROP 2DROP
 
 CP @
 129 C,
@@ -45,7 +45,7 @@ CP @
 LATEST @ ,
 LATEST !
 (DOCOL) ,
-' LIT , -1 , ' PARSE , ' DROP , ' DROP ,
+' LIT , -1 , ' PARSE , ' 2DROP ,
 ' EXIT ,
 
 \ Now I can write comments like this!
@@ -75,8 +75,8 @@ LATEST !
 ' LIT ,
 41 , \ ascii ")". The LIT word will return this value at interpretation time.
 ' PARSE , \ Read from input (this file) until we find that character.
-' DROP , ' DROP , \ PARSE returns a string, but we don't need it so we can throw it out
-' PARSE-NAME , ' DROP , ' DROP , \ and consume the next space-delimited word, which IS the )
+' 2DROP , \ PARSE returns a string, but we don't need it so we can throw it out
+' PARSE-NAME , ' 2DROP , \ and consume the next space-delimited word, which IS the )
 ' EXIT ,
 
 \ I'm tired of looking up ASCII values
@@ -98,7 +98,7 @@ HERE                        \ This is the start of a loop. Pushing CP onto the s
 ' BRANCH , SWAP ,           \ Unconditionally branch back to the start of the loop
 HERE SWAP !                 \ Fill in the target of the forward jump, now that we've reached it
 \ Looping/conditionals will be a lot easier once we've got a compiler to handle branching
- ' DROP , ' DROP ,          \ Clear the parsed name from the stack
+ ' 2DROP ,                  \ Clear the parsed name from the stack
 ' LATEST , ' @ , ' , ,      \ Compile the pointer to the previous word
 ' LATEST , ' ! ,            \ update that LATEST pointer to include our new word
 ' (DOVAR) , ' , ,           \ and default to the behavior of a variable
