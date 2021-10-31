@@ -710,6 +710,7 @@ impl Compiler {
                 Call(push_d),
             ],
         );
+
         self.define_native_word(
             "UM*",
             vec![],
@@ -726,7 +727,98 @@ impl Compiler {
         );
 
         self.define_native_word(
+            "D*",
+            vec![],
+            vec![
+                Call(pop),
+                SetLocal(0),
+                Call(pop_d),
+                GetLocal(0),
+                I64ExtendSI32,
+                I64Mul,
+                Call(push_d),
+            ],
+        );
+
+        self.define_native_word(
+            "UD*",
+            vec![],
+            vec![
+                Call(pop),
+                SetLocal(0),
+                Call(pop_d),
+                GetLocal(0),
+                I64ExtendUI32,
+                I64Mul,
+                Call(push_d),
+            ],
+        );
+
+        self.define_native_word(
             "UM/MOD",
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop),
+                I64ExtendSI32,
+                SetLocal(2),
+                Call(pop_d),
+                TeeLocal(1),
+                GetLocal(2),
+                I64RemU,
+                I32WrapI64,
+                Call(push),
+                GetLocal(1),
+                GetLocal(2),
+                I64DivU,
+                I32WrapI64,
+                Call(push),
+            ],
+        );
+
+        self.define_native_word(
+            "/MOD",
+            vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+            vec![
+                Call(pop),
+                SetLocal(2),
+                Call(pop),
+                TeeLocal(1),
+                GetLocal(2),
+                I32DivS,
+                SetLocal(3), // store quotient for now
+                GetLocal(1),
+                GetLocal(2),
+                I32RemS,
+                SetLocal(4), // store remainder as well
+
+                // To find the "real" mod, add divisor if quotient is negative
+                GetLocal(4),
+                GetLocal(2),
+                I32Const(0),
+                GetLocal(3),
+                I32Const(0),
+                I32LtS,
+                TeeLocal(0),
+                Select,
+                I32Add,
+                Call(push),
+
+                // To find the "real" quotient, subtract 1 if it is negative
+                GetLocal(3),
+                I32Const(1),
+                I32Const(0),
+                GetLocal(0),
+                Select,
+                I32Sub,
+                Call(push),
+            ],
+        );
+
+        self.define_colon_word("/", vec![ColonValue::XT("/MOD"), ColonValue::XT("NIP")]);
+        self.define_colon_word("MOD", vec![ColonValue::XT("/MOD"), ColonValue::XT("DROP")]);
+
+        self.define_native_word(
+            "U/MOD",
             vec![ValueType::I32],
             vec![
                 Call(pop),
@@ -734,79 +826,97 @@ impl Compiler {
                 Call(pop),
                 TeeLocal(0),
                 GetLocal(1),
-                I32DivU,
+                I32RemU,
                 Call(push),
                 GetLocal(0),
                 GetLocal(1),
-                I32RemU,
+                I32DivU,
                 Call(push),
             ],
         );
 
-        #[rustfmt::skip]
-        self.define_native_word("/", vec![ValueType::I32], vec![
-            Call(pop),
-            TeeLocal(1), // store dividend for later (TODO: check for divide by 0)
-            Call(pop),
-            TeeLocal(0), // store divisor as well
+        self.define_native_word(
+            "SM/REM",
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop),
+                I64ExtendSI32,
+                SetLocal(2),
+                Call(pop_d),
+                TeeLocal(1),
+                GetLocal(2),
+                I64RemS,
+                I32WrapI64,
+                Call(push),
+                GetLocal(1),
+                GetLocal(2),
+                I64DivS,
+                I32WrapI64,
+                Call(push),
+            ],
+        );
 
-            // To find the "real" divisor, check if the signs mismatch
-            I32Xor,
-            I32Const(i32::MIN), // 0x80000000 (high bit set)
-            I32And,
+        self.define_native_word(
+            "FM/MOD",
+            vec![ValueType::I64, ValueType::I64, ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop),
+                I64ExtendSI32,
+                SetLocal(2),
+                Call(pop_d),
+                TeeLocal(1),
+                GetLocal(2),
+                I64DivS,
+                SetLocal(3), // store quotient for now
+                GetLocal(1),
+                GetLocal(2),
+                I64RemS,
+                SetLocal(4), // store remainder as well
 
-            If(BlockType::Value(ValueType::I32)),
-            // WASM has round-towards-0 semantics, forth has round-negative.
-            // So make sure that |divisor| += |dividend|-1 to compensate.
-            GetLocal(0),
-            GetLocal(1),
-            I32Sub, // divisor -= dividend means |divisor| += |dividend|
+                // To find the "real" mod, subtract dividend if quotient is negative
+                GetLocal(4),
+                GetLocal(1),
+                I64Const(0),
+                GetLocal(3),
+                I64Const(0),
+                I64LtS,
+                TeeLocal(0),
+                Select,
+                I64Sub,
+                I32WrapI64,
+                Call(push),
 
-            I32Const(1),
-            I32Const(-1),
-            GetLocal(0),
-            I32Const(i32::MIN),
-            I32And,
-            Select,
-            I32Add, // divisor += -sign(divisor) means |divisor| -= 1
+                // To find the "real" quotient, add 1 if it is negative
+                GetLocal(3),
+                I64Const(1),
+                I64Const(0),
+                GetLocal(0),
+                Select,
+                I64Add,
+                I32WrapI64,
+                Call(push),
+            ],
+        );
 
-            Else, // if divisor and dividend have matching signs, just use divisor
-            GetLocal(0),
-            End,
-
-            GetLocal(1),
-            I32DivS,
-            Call(push),
-        ]);
-        #[rustfmt::skip]
-        self.define_native_word("MOD", vec![ValueType::I32], vec![
-            Call(pop),
-            TeeLocal(1), // store dividend for later (TODO: check for divide by 0)
-            Call(pop),
-            TeeLocal(0), // store divisor as well
-
-            // To find the "real" mod, check if the signs mismatch
-            I32Xor,
-            I32Const(i32::MIN), // 0x80000000 (high bit set)
-            I32And,
-
-            If(BlockType::Value(ValueType::I32)),
-            // WASM has round-towards-0 semantics, forth has round-negative.
-            // Add the dividend to the remainder to get the mod.
-            GetLocal(0),
-            GetLocal(1),
-            I32RemS,
-            GetLocal(1),
-            I32Add,
-
-            Else, // If the signs match, the remainder IS the mod.
-            GetLocal(0),
-            GetLocal(1),
-            I32RemS,
-            End,
-
-            Call(push),
-        ]);
+        self.define_native_word(
+            "UD/MOD",
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop),
+                I64ExtendSI32,
+                SetLocal(2),
+                Call(pop_d),
+                TeeLocal(1),
+                GetLocal(2),
+                I64RemU,
+                I32WrapI64,
+                Call(push),
+                GetLocal(1),
+                GetLocal(2),
+                I64DivU,
+                Call(push_d),
+            ],
+        );
 
         self.define_native_word(
             "MIN",
@@ -1163,7 +1273,7 @@ mod tests {
     }
 
     #[test]
-    fn should_handle_signed_div_and_mod() {
+    fn should_handle_signed_div_mod() {
         let runtime = build(|_| {}).unwrap();
         type TestCase = ((i32, i32), (i32, i32));
 
@@ -1181,18 +1291,58 @@ mod tests {
 
                 runtime.push(divisor).unwrap();
                 runtime.push(dividend).unwrap();
-                runtime.execute("/").unwrap();
+                runtime.execute("/MOD").unwrap();
                 let quotient = runtime.pop().unwrap();
-
-                runtime.push(divisor).unwrap();
-                runtime.push(dividend).unwrap();
-                runtime.execute("MOD").unwrap();
                 let modulo = runtime.pop().unwrap();
 
                 ((divisor, dividend), (quotient, modulo))
             })
             .collect();
         assert_eq!(results, test_cases);
+    }
+
+    #[test]
+    fn should_handle_signed_div_rem() {
+        let runtime = build(|_| {}).unwrap();
+        type TestCase = ((i64, i32), (i32, i32));
+
+        let test_cases: Vec<TestCase> = vec![
+            ((7, 4), (1, 3)),
+            ((-7, 4), (-1, -3)),
+            ((7, -4), (-1, 3)),
+            ((-7, -4), (1, -3)),
+        ];
+
+        let results: Vec<TestCase> = test_cases
+            .iter()
+            .map(|case| {
+                let ((divisor, dividend), _) = *case;
+
+                runtime.push_double(divisor).unwrap();
+                runtime.push(dividend).unwrap();
+                runtime.execute("SM/REM").unwrap();
+                let quotient = runtime.pop().unwrap();
+                let remainder = runtime.pop().unwrap();
+
+                ((divisor, dividend), (quotient, remainder))
+            })
+            .collect();
+        assert_eq!(results, test_cases);
+    }
+
+    #[test]
+    fn should_support_min_and_max() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.execute("MIN").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.execute("MAX").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 2);
     }
 
     #[test]
