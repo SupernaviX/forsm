@@ -216,6 +216,8 @@ impl Compiler {
                 // write data
                 GetGlobal(stack),
                 GetLocal(0),
+                I64Const(32),
+                I64Rotl,
                 I64Store(3, 0),
                 End,
             ],
@@ -228,6 +230,8 @@ impl Compiler {
                 // read data
                 GetGlobal(stack),
                 I64Load(3, 0),
+                I64Const(32),
+                I64Rotl,
                 // increment stack pointer
                 GetGlobal(stack),
                 I32Const(8),
@@ -667,11 +671,17 @@ impl Compiler {
         );
         self.define_native_word(
             "ABS",
-            vec![],
+            vec![ValueType::I32],
             vec![
                 Call(pop),
-                I32Const(i32::MAX), // all bits but high bit set
-                I32And,
+                TeeLocal(0),
+                I32Const(31),
+                I32ShrS,
+                TeeLocal(1),
+                GetLocal(0),
+                I32Xor,
+                GetLocal(1),
+                I32Sub,
                 Call(push),
             ],
         );
@@ -687,8 +697,19 @@ impl Compiler {
         self.define_native_word("D-", vec![ValueType::I64], binary_i64(I64Sub));
         self.define_native_word(
             "DABS",
-            vec![],
-            vec![Call(pop_d), I64Const(i64::MAX), I64And, Call(push_d)],
+            vec![ValueType::I64, ValueType::I64],
+            vec![
+                Call(pop_d),
+                TeeLocal(1),
+                I64Const(63),
+                I64ShrS,
+                TeeLocal(2),
+                GetLocal(1),
+                I64Xor,
+                GetLocal(2),
+                I64Sub,
+                Call(push_d),
+            ],
         );
         self.define_native_word(
             "DNEGATE",
@@ -1328,6 +1349,35 @@ mod tests {
             })
             .collect();
         assert_eq!(results, test_cases);
+    }
+
+    #[test]
+    fn should_handle_double_division() {
+        let runtime = build(|_| {}).unwrap();
+        runtime.push_double(123).unwrap();
+        assert_eq!(0, runtime.pop().unwrap());
+        assert_eq!(123, runtime.pop().unwrap());
+
+        runtime.push(123).unwrap();
+        runtime.push(0).unwrap();
+        runtime.push(10).unwrap();
+        runtime.execute("UD/MOD").unwrap();
+
+        assert_eq!(runtime.pop_double().unwrap(), 12);
+        assert_eq!(runtime.pop().unwrap(), 3);
+    }
+
+    #[test]
+    fn should_compute_absolute_value() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.push(123).unwrap();
+        runtime.execute("ABS").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 123);
+
+        runtime.push(-123).unwrap();
+        runtime.execute("ABS").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 123);
     }
 
     #[test]
