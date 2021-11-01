@@ -5,7 +5,7 @@
 cr test
 
 : test
-  40 emit test 41 emit
+  [char] ( emit test [char] ) emit
 ;
 
 cr test
@@ -18,3 +18,10 @@ cr -123 s>d d.
 cr 123 u.
 cr 123 .
 cr -123 .
+
+cr 1 2 3 .s
+cr .
+cr .
+cr .s
+cr .
+cr .s

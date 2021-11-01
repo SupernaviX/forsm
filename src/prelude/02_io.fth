@@ -1,5 +1,11 @@
 32 constant bl
 : cr 10 emit ;
+: space bl emit ;
+
+\ get the ascii value of the next character
+: char parse-name drop c@ ;
+\ compile the ascii value of the next char into the current def
+: [char] parse-name drop c@ postpone literal ; immediate
 
 \ quick numeric utilities
 : pad here 340 + ;
@@ -22,8 +28,8 @@ variable holdend
 : # \ include one digit
   base @ ud/mod rot
   dup 9 <=
-    if 48 +
-    else 55 +
+    if [char] 0 +
+    else [ char A 10 - ] literal +
     then
   hold
 ;
@@ -36,11 +42,20 @@ variable holdend
 ;
 
 : sign \ include a - if the number is negative
-  <0 if 45 hold then
+  <0 if [char] - hold then
 ;
 
-\ functions to display the top of the stack
-: ud. <# #s #> type ;
-: d. dup -rot dabs <# #s rot sign #> type ;
+\ words to display numbers
+: ud. <# #s #> type space ;
+: d. dup -rot dabs <# #s rot sign #> type space ;
 : u. 0 ud. ;
 : . s>d d. ;
+
+: .s \ display the WHOLE stack
+  depth
+  [char] < emit dup 0 <# #s #> type [char] > emit space
+  depth 1- 0 ?do
+    dup i - pick .
+  loop
+  drop
+;

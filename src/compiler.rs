@@ -164,6 +164,9 @@ impl Compiler {
     }
 
     fn define_stacks(&mut self) {
+        const PARAM_STACK_BASE: i32 = 0xf080;
+        const RETURN_STACK_BASE: i32 = 0xf000;
+
         let define_stack = |assembler: &mut Assembler, stack| {
             let push_instructions = vec![
                 // decrement stack pointer
@@ -197,7 +200,7 @@ impl Compiler {
             (push, pop)
         };
         // define the normal stack
-        let stack = self.add_global(0xf080);
+        let stack = self.add_global(PARAM_STACK_BASE);
         let (push, pop) = define_stack(&mut self.assembler, stack);
         self.stack = stack;
         self.push = push;
@@ -244,7 +247,7 @@ impl Compiler {
         self.pop_d = pop_d;
 
         // define the return stack
-        let r_stack = self.add_global(0xf000);
+        let r_stack = self.add_global(RETURN_STACK_BASE);
         let (push_r, pop_r) = define_stack(&mut self.assembler, r_stack);
         self.push_r = push_r;
         self.pop_r = pop_r;
@@ -416,6 +419,36 @@ impl Compiler {
                 I32Store(2, 4),
                 I32Store(2, 0),
                 I32Store(2, 8),
+            ],
+        );
+        self.define_native_word(
+            "PICK",
+            vec![],
+            vec![
+                GetGlobal(stack),
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),  // read the head of the stack
+                I32Const(1),
+                I32Add,         // + to account for the address itself at the top of the stack
+                I32Const(2),
+                I32Shl,         // * 4 to make it an offset
+                GetLocal(0),
+                I32Add,
+                I32Load(2, 0),  // read that offset from the head
+                I32Store(2, 0), // and store it back in the head
+            ],
+        );
+        self.define_native_word(
+            "DEPTH",
+            vec![],
+            vec![
+                I32Const(PARAM_STACK_BASE),
+                GetGlobal(stack),
+                I32Sub,
+                I32Const(2),
+                I32ShrU,
+                Call(push),
             ],
         );
         self.define_native_word(">R", vec![], vec![Call(pop), Call(push_r)]);
@@ -1510,6 +1543,43 @@ mod tests {
         runtime.execute("TUCK").unwrap();
         assert_eq!(runtime.pop().unwrap(), 2);
         assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 2);
+    }
+
+    #[test]
+    fn should_pick() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.push(10).unwrap();
+        runtime.push(20).unwrap();
+        runtime.push(30).unwrap();
+
+        runtime.push(0).unwrap();
+        runtime.execute("PICK").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 30);
+
+        runtime.push(1).unwrap();
+        runtime.execute("PICK").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 20);
+
+        runtime.push(2).unwrap();
+        runtime.execute("PICK").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 10);
+    }
+
+    #[test]
+    fn should_report_depth() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.execute("DEPTH").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0);
+
+        runtime.push(1).unwrap();
+        runtime.execute("DEPTH").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+
+        runtime.push(2).unwrap();
+        runtime.execute("DEPTH").unwrap();
         assert_eq!(runtime.pop().unwrap(), 2);
     }
 
