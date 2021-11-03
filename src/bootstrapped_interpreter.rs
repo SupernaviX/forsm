@@ -35,9 +35,7 @@ fn build_io(compiler: &mut Compiler) {
 
     // iovec/ciovec are variables, the constants are just their addresses
     compiler.define_constant_word("IOVEC", 0xf8);
-    compiler.define_variable_word("IOVECS", 0xf8);
     compiler.define_constant_word("CIOVEC", 0xf0);
-    compiler.define_variable_word("CIOVECS", 0xf0);
 
     // read a chunk of stdin into the file buffer ( -- )
     #[rustfmt::skip]
@@ -48,7 +46,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("STDINBUF"), XT("IOVEC"), XT("!"),
             Lit(1024), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
             // try to read 1024 bytes
-            Lit(0), XT("IOVECS"), Lit(1), XT("#STDINBUF"), XT("FD-READ"), XT("THROW"),
+            Lit(0), XT("IOVEC"), Lit(1), XT("#STDINBUF"), XT("FD-READ"), XT("THROW"),
             // reset stdinbuf pointer
             Lit(0), XT(">STDINBUF"), XT("!"),
         ],
@@ -128,7 +126,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("EMIT-BUFFER"), XT("!"), // store the character in a buffer
             XT("EMIT-BUFFER"), XT("CIOVEC"), XT("!"), // set up the ciovec
             Lit(1), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
-            Lit(1), XT("CIOVECS"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
+            Lit(1), XT("CIOVEC"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
         ],
     );
 
@@ -143,7 +141,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("DUP"), XT(">0"), QBranch(88), // while we have bytes to write..
             // try to write U bytes to the file
             XT("DUP"), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
-            Lit(1), XT("CIOVECS"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
+            Lit(1), XT("CIOVEC"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
             XT("BYTES-WRITTEN"), XT("@"),
             // however many bytes we write, inc the buffer by that much
             XT("DUP"), XT("CIOVEC"), XT("+!"),

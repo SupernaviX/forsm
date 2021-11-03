@@ -23,12 +23,11 @@ struct ForthEnv {
     memory: LazyInit<Memory>,
 }
 impl ForthEnv {
-    pub fn fd_read(&self, fd: i32, iovecs_addr: u32, iovecs_len: u32, res_addr: u32) -> i32 {
+    pub fn fd_read(&self, fd: i32, iovec_addr: u32, iovecs_len: u32, res_addr: u32) -> i32 {
         assert_eq!(fd, 0);
         assert_eq!(iovecs_len, 1);
-        let iovec = self.read_u32(iovecs_addr);
-        let buf = self.read_u32(iovec);
-        let len = self.read_u32(iovec + 4);
+        let buf = self.read_u32(iovec_addr);
+        let len = self.read_u32(iovec_addr + 4);
 
         let mut stdin = self.stdin.lock().unwrap();
         let bytes_read = len.min(stdin.len() as u32);
@@ -39,12 +38,11 @@ impl ForthEnv {
         self.write_bytes(res_addr, &bytes_read.to_le_bytes());
         0
     }
-    pub fn fd_write(&self, fd: i32, ciovecs_addr: u32, ciovecs_len: u32, res_addr: u32) -> i32 {
+    pub fn fd_write(&self, fd: i32, ciovec_addr: u32, ciovecs_len: u32, res_addr: u32) -> i32 {
         assert_eq!(fd, 1);
         assert_eq!(ciovecs_len, 1);
-        let ciovec = self.read_u32(ciovecs_addr);
-        let buf = self.read_u32(ciovec);
-        let len = self.read_u32(ciovec + 4);
+        let buf = self.read_u32(ciovec_addr);
+        let len = self.read_u32(ciovec_addr + 4);
         let bytes = self.read_bytes(buf, len);
 
         let mut stdout = self.stdout.lock().unwrap();
