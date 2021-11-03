@@ -97,15 +97,16 @@ impl Compiler {
 
     pub fn define_imported_word(
         &mut self,
-        module: &str,
         name: &str,
+        module: &str,
+        field: &str,
         params: usize,
         results: usize,
     ) {
-        // Define an imported with the given signature, but a lowercase name
+        // Define an imported with the given signature
         let func = self.assembler.add_imported_func(
             module.to_owned(),
-            name.to_owned(),
+            field.to_owned(),
             vec![ValueType::I32; params],
             vec![ValueType::I32; results],
         );
@@ -1272,7 +1273,7 @@ impl Default for Compiler {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use wasmer::{imports, Function, ImportObject, Store};
+    use wasmer::{imports, Function, ImportObject, Module, Store};
 
     use super::{ColonValue::*, Compiler};
     use crate::runtime::Runtime;
@@ -1281,13 +1282,13 @@ mod tests {
     where
         T: FnOnce(&mut Compiler),
     {
-        build_with_imports(func, |_| imports! {})
+        build_with_imports(func, |_, _| imports! {})
     }
 
     fn build_with_imports<T, F>(func: T, imports: F) -> Result<Runtime>
     where
         T: FnOnce(&mut Compiler),
-        F: FnOnce(&Store) -> ImportObject,
+        F: FnOnce(&Store, &Module) -> ImportObject,
     {
         let mut compiler = Compiler::default();
         func(&mut compiler);
@@ -1662,16 +1663,16 @@ mod tests {
     fn should_support_imports() {
         let runtime = build_with_imports(
             |compiler| {
-                compiler.define_imported_word("TEST", "SEVENTEEN", 0, 2);
-                compiler.define_imported_word("TEST", "SWALLOW", 2, 0);
-                compiler.define_imported_word("TEST", "TRIM", 2, 2);
+                compiler.define_imported_word("SEVENTEEN", "test", "seventeen", 0, 2);
+                compiler.define_imported_word("SWALLOW", "test", "swallow", 2, 0);
+                compiler.define_imported_word("TRIM", "test", "trim", 2, 2);
             },
-            |store| {
+            |store, _| {
                 imports! {
-                    "TEST" => {
-                        "SEVENTEEN" => Function::new_native(store, || (10, 7)),
-                        "SWALLOW" => Function::new_native(store, |_: i32, _: i32| {}),
-                        "TRIM" => Function::new_native(store, |a: i32, b: i32| {
+                    "test" => {
+                        "seventeen" => Function::new_native(store, || (10, 7)),
+                        "swallow" => Function::new_native(store, |_: i32, _: i32| {}),
+                        "trim" => Function::new_native(store, |a: i32, b: i32| {
                             (a + 4, b - 8)
                         }),
                     }

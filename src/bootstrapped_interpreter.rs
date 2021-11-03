@@ -24,10 +24,10 @@ pub fn build(compiler: &mut Compiler) {
 fn build_io(compiler: &mut Compiler) {
     // read from an FD into a buffer
     // ( fid iovec-arr iovec-len >bytes-read -- err )
-    compiler.define_imported_word("IO", "FD-READ", 4, 1);
+    compiler.define_imported_word("FD-READ", "wasi_snapshot_preview1", "fd_read", 4, 1);
     // write from a buffer to an FD
     // ( fid ciovec-arr ciovec-len >bytes-written -- err )
-    compiler.define_imported_word("IO", "FD-WRITE", 4, 1);
+    compiler.define_imported_word("FD-WRITE", "wasi_snapshot_preview1", "fd_write", 4, 1);
 
     compiler.define_constant_word("STDINBUF", 0x100);
     compiler.define_variable_word(">STDINBUF", 0);

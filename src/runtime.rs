@@ -12,11 +12,11 @@ pub struct Runtime {
 impl Runtime {
     pub fn new<F>(binary: &[u8], imports: F) -> Result<Self>
     where
-        F: FnOnce(&Store) -> ImportObject,
+        F: FnOnce(&Store, &Module) -> ImportObject,
     {
         let store = Store::default();
         let module = Module::from_binary(&store, binary)?;
-        let instance = Instance::new(&module, &imports(&store))?;
+        let instance = Instance::new(&module, &imports(&store, &module))?;
         Ok(Self { instance })
     }
 

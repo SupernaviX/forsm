@@ -1,102 +1,24 @@
-use std::{
-    convert::TryInto,
-    fs, str,
-    sync::{Arc, Mutex},
-};
+use std::{fs, str};
 
 use anyhow::{anyhow, Result};
-use wasmer::{imports, Function, ImportObject, LazyInit, Memory, Store, WasmerEnv};
+use wasmer_wasi::{Pipe, WasiEnv, WasiStateBuilder};
 
 use super::Runtime;
 
 pub struct InterpreterRuntime {
-    stdin: Arc<Mutex<Vec<u8>>>,
-    stdout: Arc<Mutex<Vec<u8>>>,
+    wasi_env: WasiEnv,
     runtime: Runtime,
-}
-
-#[derive(WasmerEnv, Clone)]
-struct ForthEnv {
-    stdin: Arc<Mutex<Vec<u8>>>,
-    stdout: Arc<Mutex<Vec<u8>>>,
-    #[wasmer(export(name = "memory"))]
-    memory: LazyInit<Memory>,
-}
-impl ForthEnv {
-    pub fn fd_read(&self, fd: i32, iovec_addr: u32, iovecs_len: u32, res_addr: u32) -> i32 {
-        assert_eq!(fd, 0);
-        assert_eq!(iovecs_len, 1);
-        let buf = self.read_u32(iovec_addr);
-        let len = self.read_u32(iovec_addr + 4);
-
-        let mut stdin = self.stdin.lock().unwrap();
-        let bytes_read = len.min(stdin.len() as u32);
-
-        let bytes = stdin.drain(0..bytes_read as usize);
-        self.write_bytes(buf, bytes.as_slice());
-
-        self.write_bytes(res_addr, &bytes_read.to_le_bytes());
-        0
-    }
-    pub fn fd_write(&self, fd: i32, ciovec_addr: u32, ciovecs_len: u32, res_addr: u32) -> i32 {
-        assert_eq!(fd, 1);
-        assert_eq!(ciovecs_len, 1);
-        let buf = self.read_u32(ciovec_addr);
-        let len = self.read_u32(ciovec_addr + 4);
-        let bytes = self.read_bytes(buf, len);
-
-        let mut stdout = self.stdout.lock().unwrap();
-        stdout.extend(&bytes);
-
-        self.write_bytes(res_addr, &len.to_le_bytes());
-        0
-    }
-    fn read_u32(&self, address: u32) -> u32 {
-        let bytes = self.read_bytes(address, 4);
-        u32::from_le_bytes(bytes.try_into().unwrap())
-    }
-
-    fn read_bytes(&self, start: u32, len: u32) -> Vec<u8> {
-        let start = start as usize;
-        let len = len as usize;
-        let memory = self.memory_ref().unwrap();
-
-        unsafe {
-            let ptr = memory.data_ptr().add(start);
-            let slice = std::slice::from_raw_parts(ptr, len);
-            slice.to_vec()
-        }
-    }
-    fn write_bytes(&self, start: u32, bytes: &[u8]) {
-        let start = start as usize;
-        let len = bytes.len();
-        let memory = self.memory_ref().unwrap();
-
-        unsafe {
-            let ptr = memory.data_ptr().add(start);
-            let slice = std::slice::from_raw_parts_mut(ptr, len);
-            slice.copy_from_slice(bytes);
-        }
-    }
 }
 
 impl InterpreterRuntime {
     pub fn new(binary: &[u8]) -> Result<Self> {
-        let stdin = Arc::new(Mutex::new(vec![]));
-        let stdout = Arc::new(Mutex::new(vec![]));
-        let env = ForthEnv {
-            stdin: Arc::clone(&stdin),
-            stdout: Arc::clone(&stdout),
-            memory: Default::default(),
-        };
-        let runtime = Runtime::new(binary, |store| {
-            InterpreterRuntime::build_imports(store, env)
-        })?;
-        Ok(Self {
-            stdin,
-            stdout,
-            runtime,
-        })
+        let mut wasi_env = WasiStateBuilder::default()
+            .stdin(Box::new(Pipe::new()))
+            .stdout(Box::new(Pipe::new()))
+            .finalize()
+            .unwrap();
+        let runtime = Runtime::new(binary, |_, module| wasi_env.import_object(module).unwrap())?;
+        Ok(Self { wasi_env, runtime })
     }
 
     pub fn run_directory(&self, dir: &str) -> Result<String> {
@@ -124,14 +46,18 @@ impl InterpreterRuntime {
     }
 
     pub fn write_input(&self, input: &str) -> Result<()> {
-        self.stdin.lock().unwrap().extend(input.as_bytes());
+        let mut wasi = self.wasi_env.state();
+        let stdin = wasi.fs.stdin_mut()?.as_mut().unwrap();
+        stdin.write_all(input.as_bytes())?;
         Ok(())
     }
 
     pub fn read_output(&self) -> Result<String> {
-        let mut stdout = self.stdout.lock().unwrap();
-        let result = str::from_utf8(&stdout)?.to_owned();
-        stdout.clear();
+        let mut wasi = self.wasi_env.state();
+        let stdout = wasi.fs.stdout_mut()?.as_mut().unwrap();
+        let mut output = Vec::with_capacity(stdout.size() as usize);
+        stdout.read_to_end(&mut output)?;
+        let result = str::from_utf8(&output)?.to_owned();
         Ok(result)
     }
 
@@ -171,16 +97,5 @@ impl InterpreterRuntime {
             cell.set(*value);
         }
         Ok(())
-    }
-
-    fn build_imports(store: &Store, env: ForthEnv) -> ImportObject {
-        let fd_read = Function::new_native_with_env(store, env.clone(), ForthEnv::fd_read);
-        let fd_write = Function::new_native_with_env(store, env.clone(), ForthEnv::fd_write);
-        imports! {
-            "IO" => {
-                "FD-READ" => fd_read,
-                "FD-WRITE" => fd_write,
-            }
-        }
     }
 }
