@@ -428,11 +428,11 @@ impl Compiler {
                 GetGlobal(stack),
                 TeeLocal(0),
                 GetLocal(0),
-                I32Load(2, 0),  // read the head of the stack
+                I32Load(2, 0), // read the head of the stack
                 I32Const(1),
-                I32Add,         // + to account for the address itself at the top of the stack
+                I32Add, // + to account for the address itself at the top of the stack
                 I32Const(2),
-                I32Shl,         // * 4 to make it an offset
+                I32Shl, // * 4 to make it an offset
                 GetLocal(0),
                 I32Add,
                 I32Load(2, 0),  // read that offset from the head
@@ -831,7 +831,12 @@ impl Compiler {
 
         self.define_native_word(
             "/MOD",
-            vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
+            vec![
+                ValueType::I32,
+                ValueType::I32,
+                ValueType::I32,
+                ValueType::I32,
+            ],
             vec![
                 Call(pop),
                 SetLocal(2),
@@ -844,7 +849,6 @@ impl Compiler {
                 GetLocal(2),
                 I32RemS,
                 SetLocal(4), // store remainder as well
-
                 // To find the "real" mod, add divisor if quotient is negative
                 GetLocal(4),
                 GetLocal(2),
@@ -856,7 +860,6 @@ impl Compiler {
                 Select,
                 I32Add,
                 Call(push),
-
                 // To find the "real" quotient, subtract 1 if it is negative
                 GetLocal(3),
                 I32Const(1),
@@ -912,7 +915,12 @@ impl Compiler {
 
         self.define_native_word(
             "FM/MOD",
-            vec![ValueType::I64, ValueType::I64, ValueType::I64, ValueType::I64],
+            vec![
+                ValueType::I64,
+                ValueType::I64,
+                ValueType::I64,
+                ValueType::I64,
+            ],
             vec![
                 Call(pop),
                 I64ExtendSI32,
@@ -926,7 +934,6 @@ impl Compiler {
                 GetLocal(2),
                 I64RemS,
                 SetLocal(4), // store remainder as well
-
                 // To find the "real" mod, subtract dividend if quotient is negative
                 GetLocal(4),
                 GetLocal(1),
@@ -939,7 +946,6 @@ impl Compiler {
                 I64Sub,
                 I32WrapI64,
                 Call(push),
-
                 // To find the "real" quotient, add 1 if it is negative
                 GetLocal(3),
                 I64Const(1),
