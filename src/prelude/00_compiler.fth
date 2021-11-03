@@ -9,6 +9,7 @@ CP @
 40 C,
 39 C,
 41 C,
+0 CP +!
 LATEST @ ,
 LATEST !
 (DOCOL) ,
@@ -27,6 +28,7 @@ PARSE-NAME EXIT FIND-NAME NAME>XT ,
 CP @
 1 C,
 39 C,
+2 CP +!
 LATEST @ ,
 LATEST !
 (DOCOL) ,
@@ -42,6 +44,7 @@ LATEST !
 CP @
 129 C,
 92 C,
+2 CP +!
 LATEST @ ,
 LATEST !
 (DOCOL) ,
@@ -53,8 +56,9 @@ LATEST !
 \ I'll define a short helper word HERE to get the latest address of the stack
 \ Heavily commenting it to make it clearer what's going on
 CP @ \ hold onto the head of the dictionary for later
-4 C, \ this word has a 2-character name. The word C, adds a single byte to the the dictionary.
+4 C, \ this word has a 4-character name. The word C, adds a single byte to the the dictionary.
 72 C, 69 C, 82 C, 69 C, \ ascii "HERE"
+3 CP +!   \ Manually adding padding here so addresses are 4-byte aligned internally
 LATEST @ , \ Link to the word before this in the dict. The word , adds a cell (4 bytes) to the dictionary.
 LATEST !   \ Update the dictionary now that ENOUGH of this word is defined to not break anything
 (DOCOL) , \ Mark this as a colon definition. (DOCOL) is a native word that starts running the body of a "colon definition""
@@ -64,11 +68,25 @@ LATEST !   \ Update the dictionary now that ENOUGH of this word is defined to no
 ' EXIT , \ Exit goes at the end of every colon definition. It returns control to the caller.
 \ And that's it! we've got "HERE".
 
+\ define ALIGN to ensure the CP is aligned, so I don't haev to do it manually
+HERE
+5 C,
+65 C, 76 C, 73 C, 71 C, 78 C, \ ascii "ALIGN"
+2 CP +!
+LATEST @ ,
+LATEST !
+(DOCOL) ,
+' HERE ,
+' ALIGNED ,
+' CP ,
+' ! ,
+' EXIT ,
 
 \ inline comments sound nice too, I'll add those next
 HERE
 129 C,  \ This word is immediate (128) and has a 1-character name (+1).
 40 C, \ ascii "("
+ALIGN
 LATEST @ ,
 LATEST !
 (DOCOL) ,
@@ -84,6 +102,7 @@ LATEST !
 HERE
 6 C,
 67 C, 82 C, 69 C, 65 C, 84 C, 69 C, \ CREATE
+ALIGN
 LATEST @ ,
 LATEST !
 (DOCOL) ,
@@ -98,7 +117,8 @@ HERE                        \ This is the start of a loop. Pushing CP onto the s
 ' BRANCH , SWAP ,           \ Unconditionally branch back to the start of the loop
 HERE SWAP !                 \ Fill in the target of the forward jump, now that we've reached it
 \ Looping/conditionals will be a lot easier once we've got a compiler to handle branching
- ' 2DROP ,                  \ Clear the parsed name from the stack
+' ALIGN ,                   \ Make sure the dictionary head is aligned
+' 2DROP ,                   \ Clear the parsed name from the stack
 ' LATEST , ' @ , ' , ,      \ Compile the pointer to the previous word
 ' LATEST , ' ! ,            \ update that LATEST pointer to include our new word
 ' (DOVAR) , ' , ,           \ and default to the behavior of a variable

@@ -33,6 +33,17 @@ pub struct Compiler {
     execution_tokens: HashMap<String, i32>,
 }
 
+const ALIGNMENT: i32 = 4;
+fn required_padding(offset: i32) -> i32 {
+    -offset & (ALIGNMENT - 1)
+}
+fn aligned(offset: i32) -> i32 {
+    offset + required_padding(offset)
+}
+fn header_size(name: &str) -> i32 {
+    aligned(1 + name.len() as i32) + 4 + 4
+}
+
 impl Compiler {
     pub fn define_constant_word(&mut self, name: &str, value: i32) {
         let docon = self.docon;
@@ -51,7 +62,7 @@ impl Compiler {
         let q_branch_xt = self.get_execution_token("?BRANCH");
         let mut bytes = vec![];
         // track the end of the dictionary as we go, to turn relative jumps absolute
-        let mut cp = self.cp + 1 + name.len() as i32 + 4 + 4;
+        let mut cp = self.cp + header_size(name);
         for value in values {
             match value {
                 ColonValue::XT(name) => {
@@ -1205,16 +1216,17 @@ impl Compiler {
         let old_latest_address = self.latest_address;
         let latest_address = self.cp;
 
-        let mut data = Vec::with_capacity(1 + name.len() + 4 + 4 + parameter.len());
+        let mut data = Vec::with_capacity(header_size(name) as usize + parameter.len());
         data.push(name.len() as u8);
         data.extend_from_slice(name.as_bytes());
+        data.extend_from_slice(&vec![0; required_padding(data.len() as i32) as usize]);
         data.extend_from_slice(&old_latest_address.to_le_bytes());
         data.extend_from_slice(&code.to_le_bytes());
         data.extend_from_slice(parameter);
 
         // for testing purposes, store execution tokens for later
         self.execution_tokens
-            .insert(name.to_owned(), latest_address + 1 + name.len() as i32 + 4);
+            .insert(name.to_owned(), latest_address + header_size(name) - 4);
 
         let cp = self.cp + data.len() as i32;
         self.assembler.add_data(self.cp, data);

@@ -351,6 +351,9 @@ fn build_interpreter(compiler: &mut Compiler) {
         ],
     );
 
+    // Given an address, return the next aligned address ( addr -- addr )
+    compiler.define_colon_word("ALIGNED", vec![Lit(3), XT("+"), Lit(-4), XT("AND")]);
+
     // Given a name token, get its length ( nt -- u )
     compiler.define_colon_word("NAME>U", vec![XT("C@"), Lit(31), XT("AND")]);
 
@@ -371,6 +374,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         vec![
             XT("DUP"), XT("NAME>U"), // get word length
             XT("1+"), XT("+"), // backword is 1 + len bytes into the def
+            XT("ALIGNED"),
             XT("@"),
         ],
     );
@@ -382,10 +386,17 @@ fn build_interpreter(compiler: &mut Compiler) {
     );
 
     // given a name token, get the execution token ( nt -- xt )
-    // xt is 1 + len + 4 bytes in to the definition
+    // xt is 1 + len + 4 bytes in to the definition, plus alignment
     compiler.define_colon_word(
         "NAME>XT",
-        vec![XT("DUP"), XT("NAME>U"), XT("+"), Lit(5), XT("+")],
+        vec![
+            XT("DUP"),
+            XT("NAME>U"),
+            XT("+"),
+            Lit(5),
+            XT("+"),
+            XT("ALIGNED"),
+        ],
     );
 
     // Find the address of some word ( c-addr u -- nt | 0 )
