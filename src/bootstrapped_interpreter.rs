@@ -1,4 +1,4 @@
-use super::compiler::{ColonValue::*, Compiler};
+use super::compiler::{ColonValue::*, Compiler, ParamType::*};
 
 /* Build a very basic INTERPRET word */
 pub fn build(compiler: &mut Compiler) {
@@ -24,10 +24,31 @@ pub fn build(compiler: &mut Compiler) {
 fn build_io(compiler: &mut Compiler) {
     // read from an FD into a buffer
     // ( fid iovec-arr iovec-len >bytes-read -- err )
-    compiler.define_imported_word("FD-READ", "wasi_snapshot_preview1", "fd_read", 4, 1);
+    compiler.define_imported_word(
+        "FD-READ",
+        "wasi_snapshot_preview1",
+        "fd_read",
+        vec![I32, I32, I32, I32],
+        vec![I32],
+    );
     // write from a buffer to an FD
     // ( fid ciovec-arr ciovec-len >bytes-written -- err )
-    compiler.define_imported_word("FD-WRITE", "wasi_snapshot_preview1", "fd_write", 4, 1);
+    compiler.define_imported_word(
+        "FD-WRITE",
+        "wasi_snapshot_preview1",
+        "fd_write",
+        vec![I32, I32, I32, I32],
+        vec![I32],
+    );
+    // open a file by (relative) path
+    // ( fid dirflags path-addr path-u oflags drights-base drights-inheriting fdflags >fid -- err )
+    compiler.define_imported_word(
+        "PATH-OPEN",
+        "wasi_snapshot_preview1",
+        "path_open",
+        vec![I32, I32, I32, I32, I32, I64, I64, I32, I32],
+        vec![I32],
+    );
 
     compiler.define_constant_word("STDINBUF", 0x100);
     compiler.define_variable_word(">STDINBUF", 0);

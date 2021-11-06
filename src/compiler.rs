@@ -14,6 +14,40 @@ pub enum ColonValue {
     QBranch(i32),
 }
 
+#[derive(Clone, Copy)]
+pub enum ParamType {
+    I32,
+    I64,
+}
+impl ParamType {
+    pub(crate) fn bytes(&self) -> u32 {
+        match self {
+            ParamType::I32 => 4,
+            ParamType::I64 => 8,
+        }
+    }
+    pub(crate) fn load(&self, offset: u32, instructions: &mut Vec<Instruction>) {
+        match self {
+            ParamType::I32 => instructions.push(I32Load(2, offset)),
+            ParamType::I64 => {
+                instructions.push(I64Load(2, offset));
+                instructions.push(I64Const(32));
+                instructions.push(I64Rotl);
+            }
+        }
+    }
+    pub(crate) fn store(&self, offset: u32, instructions: &mut Vec<Instruction>) {
+        match self {
+            ParamType::I32 => instructions.push(I32Store(2, offset)),
+            ParamType::I64 => {
+                instructions.push(I64Const(32));
+                instructions.push(I64Rotl);
+                instructions.push(I64Store(2, offset));
+            }
+        }
+    }
+}
+
 pub struct Compiler {
     assembler: Assembler,
     stack: u32,
@@ -100,47 +134,60 @@ impl Compiler {
         name: &str,
         module: &str,
         field: &str,
-        params: usize,
-        results: usize,
+        params: Vec<ParamType>,
+        results: Vec<ParamType>,
     ) {
+        let to_value_types = |types: &[ParamType]| -> Vec<ValueType> {
+            types
+                .iter()
+                .map(|t| match t {
+                    ParamType::I32 => ValueType::I32,
+                    ParamType::I64 => ValueType::I64,
+                })
+                .collect()
+        };
         // Define an imported with the given signature
         let func = self.assembler.add_imported_func(
             module.to_owned(),
             field.to_owned(),
-            vec![ValueType::I32; params],
-            vec![ValueType::I32; results],
+            to_value_types(&params),
+            to_value_types(&results),
         );
+        let params_bytes = params.iter().map(|p| p.bytes()).sum();
+        let results_bytes = results.iter().map(|p| p.bytes()).sum();
 
         // Define a native word to call the import using the stack
-        let locals = if results == 0 {
+        let locals = if results.is_empty() {
             vec![]
         } else {
-            vec![ValueType::I32]
+            vec![ValueType::I32, ValueType::I64]
         };
         let mut instructions = vec![];
-        if params > 0 {
+        if !params.is_empty() {
             instructions.push(GetGlobal(self.stack));
             instructions.push(TeeLocal(0));
+            let mut param_offset = params_bytes;
             // pass parameters in LIFO order, so stack effects match function signatures
-            for param in 0..params {
+            for (param, _type) in params.iter().enumerate() {
                 if param > 0 {
                     instructions.push(GetLocal(0));
                 }
-                instructions.push(I32Load(2, (params - 1 - param) as u32 * 4));
+                param_offset -= _type.bytes();
+                _type.load(param_offset, &mut instructions);
             }
         }
         instructions.push(Call(func));
         // If the stack size has changed, move the stack pointer appropriately
-        if params != results {
-            if params > 0 {
+        if params_bytes != results_bytes {
+            if !params.is_empty() {
                 instructions.push(GetLocal(0));
             } else {
                 instructions.push(GetGlobal(self.stack));
             }
-            let delta = (params * 4) as i32 - (results * 4) as i32;
+            let delta = params_bytes as i32 - results_bytes as i32;
             instructions.push(I32Const(delta));
             instructions.push(I32Add);
-            if results > 0 {
+            if !results.is_empty() {
                 // hold onto the new stack head so we can write results
                 instructions.push(TeeLocal(0));
             }
@@ -148,11 +195,17 @@ impl Compiler {
         }
         // store results in FIFO order, also so stack effects can match signatures
         // at this point, local 0 holds the head (lowest address) of the stack
-        for result in 0..results {
-            instructions.push(SetLocal(1));
+        let mut result_offset = 0;
+        for _type in results.iter().rev() {
+            let local = match _type {
+                ParamType::I32 => 1,
+                ParamType::I64 => 2,
+            };
+            instructions.push(SetLocal(local));
             instructions.push(GetLocal(0));
-            instructions.push(GetLocal(1));
-            instructions.push(I32Store(2, result as u32 * 4));
+            instructions.push(GetLocal(local));
+            _type.store(result_offset, &mut instructions);
+            result_offset += _type.bytes();
         }
         self.define_native_word(name, locals, instructions);
     }
@@ -1276,7 +1329,7 @@ mod tests {
     use wasmer::{imports, Function, ImportObject, Module, Store};
 
     use super::{ColonValue::*, Compiler};
-    use crate::runtime::Runtime;
+    use crate::{compiler::ParamType, runtime::Runtime};
 
     fn build<T>(func: T) -> Result<Runtime>
     where
@@ -1663,9 +1716,10 @@ mod tests {
     fn should_support_imports() {
         let runtime = build_with_imports(
             |compiler| {
-                compiler.define_imported_word("SEVENTEEN", "test", "seventeen", 0, 2);
-                compiler.define_imported_word("SWALLOW", "test", "swallow", 2, 0);
-                compiler.define_imported_word("TRIM", "test", "trim", 2, 2);
+                compiler.define_imported_word("SEVENTEEN", "test", "seventeen", vec![], vec![ParamType::I32, ParamType::I32]);
+                compiler.define_imported_word("SWALLOW", "test", "swallow", vec![ParamType::I32, ParamType:: I32], vec![]);
+                compiler.define_imported_word("TRIM", "test", "trim", vec![ParamType::I32, ParamType::I32], vec![ParamType::I32, ParamType::I32]);
+                compiler.define_imported_word("HAS64", "test", "has64", vec![ParamType::I64], vec![ParamType::I64]);
             },
             |store, _| {
                 imports! {
@@ -1675,6 +1729,7 @@ mod tests {
                         "trim" => Function::new_native(store, |a: i32, b: i32| {
                             (a + 4, b - 8)
                         }),
+                        "has64" => Function::new_native(store, |a: i64| { assert_eq!(a, 13); 64 as i64 }),
                     }
                 }
             },
@@ -1696,5 +1751,9 @@ mod tests {
         runtime.execute("TRIM").unwrap();
         assert_eq!(runtime.pop().unwrap(), 8);
         assert_eq!(runtime.pop().unwrap(), 4);
+
+        runtime.push_double(13).unwrap();
+        runtime.execute("HAS64").unwrap();
+        assert_eq!(runtime.pop_double().unwrap(), 64);
     }
 }
