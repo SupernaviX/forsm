@@ -49,47 +49,59 @@ fn build_io(compiler: &mut Compiler) {
         vec![I32, I32, I32, I32, I32, I64, I64, I32, I32],
         vec![I32],
     );
+    // close a file descriptor
+    // ( fid -- err )
+    compiler.define_imported_word(
+        "FD-CLOSE",
+        "wasi_snapshot_preview1",
+        "fd_close",
+        vec![I32],
+        vec![I32],
+    );
 
-    compiler.define_constant_word("STDINBUF", 0x100);
-    compiler.define_variable_word(">STDINBUF", 0);
-    compiler.define_variable_word("#STDINBUF", 0);
+    compiler.define_constant_word("INBUF", 0x100);
+    compiler.define_variable_word(">INBUF", 0);
+    compiler.define_variable_word("#INBUF", 0);
 
     // iovec/ciovec are variables, the constants are just their addresses
     compiler.define_constant_word("IOVEC", 0xf8);
     compiler.define_constant_word("CIOVEC", 0xf0);
 
+    compiler.define_variable_word(">SOURCE-ID", 0);
+    compiler.define_colon_word("SOURCE-ID", vec![XT(">SOURCE-ID"), XT("@")]);
+
     // read a chunk of stdin into the file buffer ( -- )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "LOAD-STDIN-CHUNK",
+        "LOAD-INPUT-CHUNK",
         vec![
             // Prepare the iovec to read 1024 bytes into stdinbuf
-            XT("STDINBUF"), XT("IOVEC"), XT("!"),
+            XT("INBUF"), XT("IOVEC"), XT("!"),
             Lit(1024), XT("IOVEC"), Lit(4), XT("+"), XT("!"),
             // try to read 1024 bytes
-            Lit(0), XT("IOVEC"), Lit(1), XT("#STDINBUF"), XT("FD-READ"), XT("THROW"),
+            XT("SOURCE-ID"), XT("IOVEC"), Lit(1), XT("#INBUF"), XT("FD-READ"), XT("THROW"),
             // reset stdinbuf pointer
-            Lit(0), XT(">STDINBUF"), XT("!"),
+            Lit(0), XT(">INBUF"), XT("!"),
         ],
     );
 
     compiler.define_colon_word(
-        "STDINBUF-EMPTY?",
-        vec![XT(">STDINBUF"), XT("@"), XT("#STDINBUF"), XT("@"), XT("=")],
+        "INBUF-EMPTY?",
+        vec![XT(">INBUF"), XT("@"), XT("#INBUF"), XT("@"), XT("=")],
     );
 
     compiler.define_constant_word("EOF", -1);
     // ( -- c|EOF )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "READ-STDIN-CHAR",
+        "READ-INPUT-CHAR",
         vec![
-            XT("STDINBUF-EMPTY?"), QBranch(24),
-            XT("LOAD-STDIN-CHUNK"), // read into the stdin buffer if we need to
-            XT("STDINBUF-EMPTY?"), QBranch(8),
+            XT("INBUF-EMPTY?"), QBranch(24),
+            XT("LOAD-INPUT-CHUNK"), // read into the stdin buffer if we need to
+            XT("INBUF-EMPTY?"), QBranch(8),
             XT("EOF"), XT("EXIT"), // If stdin is STILL empty after loading a chunk, it's really empty
-            XT("STDINBUF"), XT(">STDINBUF"), XT("@"), XT("+"), XT("C@"), // return the first character from the buffer
-            Lit(1), XT(">STDINBUF"), XT("+!"), // advance the buffer pointer
+            XT("INBUF"), XT(">INBUF"), XT("@"), XT("+"), XT("C@"), // return the first character from the buffer
+            Lit(1), XT(">INBUF"), XT("+!"), // advance the buffer pointer
         ],
     );
 
@@ -114,7 +126,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("DUP"), XT(">R"), // hold onto the original requested length for later
 
             // start of loop ( c-addr u )
-            XT("READ-STDIN-CHAR"),
+            XT("READ-INPUT-CHAR"),
             XT("DUP"), XT("EOF"), XT("<>"), // while we haven't hit the end of the file
             XT("OVER"), XT("IS-TERM?"), XT("AND"), // and we're reading newlines 
             QBranch(12),
@@ -127,7 +139,7 @@ fn build_io(compiler: &mut Compiler) {
             QBranch(64),
             XT("ROT"), XT("SWAP"), XT("OVER"), XT("C!"), // write to the buffer
             XT("1+"), XT("SWAP"), XT("1-"), // increment the buffer
-            XT("DUP"), QBranch(12), XT("READ-STDIN-CHAR"), Branch(4), XT("EOF"), // grab the next char (or EOF if we're done)
+            XT("DUP"), QBranch(12), XT("READ-INPUT-CHAR"), Branch(4), XT("EOF"), // grab the next char (or EOF if we're done)
             Branch(-100),
 
             XT("DROP"), // drop the final newline/EOF we read
@@ -171,6 +183,23 @@ fn build_io(compiler: &mut Compiler) {
             // and start again
             Branch(-104),
             XT("DROP") // we're done! just clean up
+        ],
+    );
+
+    compiler.define_constant_word("INIT-DIR-FD", 4);
+    compiler.define_variable_word(">FD", 0);
+
+    // ( c-addr u fam -- fileid err )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "OPEN-FILE",
+        vec![
+            XT("DROP"), // ignore fam for now, just implementing reads
+            XT("INIT-DIR-FD"), Lit(0), XT("2SWAP"),
+            Lit(0), Lit(0x1fffffff), Lit(0), Lit(0x1fffffff), Lit(0), // give ourselves full rights
+            Lit(0), XT(">FD"),
+            XT("PATH-OPEN"), // finally actually call this function
+            XT(">FD"), XT("@"), XT("SWAP"),
         ],
     );
 }
@@ -527,6 +556,26 @@ fn build_interpreter(compiler: &mut Compiler) {
             Lit(-1), XT("THROW"),
 
             Branch(-156), // end of loop
+        ],
+    );
+
+    // include a file by path ( c-addr u -- )
+    #[rustfmt::skip]
+    compiler.define_colon_word(
+        "INCLUDE-FILE",
+        vec![
+            XT("SOURCE-ID"), XT("THROW"),         // for now, can't load 2 files at once
+            Lit(0), XT("OPEN-FILE"), XT("THROW"), // actually open the file
+            XT(">SOURCE-ID"), XT("!"),            // switch to the FD
+
+            // start of execution loop
+            XT("REFILL"),
+            QBranch(12),     // quit if we are done
+            XT("INTERPRET"), // run code
+            Branch(-24),     // Good! Now do it again
+
+            XT("SOURCE-ID"), XT("FD-CLOSE"), XT("THROW"), // close the file
+            Lit(0), XT(">SOURCE-ID"), XT("!"),            // reset source
         ],
     );
 

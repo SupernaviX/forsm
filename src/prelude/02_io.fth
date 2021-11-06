@@ -54,7 +54,7 @@ variable holdend
 : .s \ display the WHOLE stack
   depth
   [char] < emit dup 0 <# #s #> type [char] > emit space
-  depth 1- 0 ?do
+  dup 0 ?do
     dup i - pick .
   loop
   drop

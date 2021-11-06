@@ -15,6 +15,7 @@ impl InterpreterRuntime {
         let mut wasi_env = WasiStateBuilder::default()
             .stdin(Box::new(Pipe::new()))
             .stdout(Box::new(Pipe::new()))
+            .preopen_dir("./src/prelude")?
             .finalize()
             .unwrap();
         let runtime = Runtime::new(binary, |_, module| wasi_env.import_object(module).unwrap())?;
@@ -25,9 +26,8 @@ impl InterpreterRuntime {
         let entries = fs::read_dir(dir)?;
         let mut output = vec![];
         for entry in entries {
-            let path = entry?.path();
-            let file = fs::read_to_string(path)?;
-            output.push(self.interpret(&file)?);
+            let name = entry?.file_name().into_string().unwrap();
+            output.push(self.interpret(&format!("PARSE-NAME {} INCLUDE-FILE", name))?);
         }
         Ok(output.join(""))
     }
