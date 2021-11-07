@@ -258,9 +258,16 @@ fn build_parser(compiler: &mut Compiler) {
             XT("AND"), QBranch(12),
             XT("1+IN!"),
             Branch(-40),
-            // Get char-to-ignore off the stack, put len on instead
-            XT("DROP"),
-            XT("DUP"), XT("'IN"), XT("SWAP"), XT("-")
+            // store the current parse location on the stack, it's word end
+            XT("'IN"), XT("SWAP"),
+            // consume ending delimiters
+            XT("PARSING?"),
+            XT("OVER"), XT("IN@"), XT("="),
+            XT("AND"), QBranch(12),
+            XT("1+IN!"),
+            Branch(-40),
+            // Get char-to-ignore off the stack, turn word end into a length
+            XT("DROP"), XT("OVER"), XT("-"),
         ]
     );
 
@@ -586,7 +593,9 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("INCLUDE-FILE"),
             StringLit("01_controlflow.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("02_io.fth"),
+            StringLit("02_strings.fth"),
+            XT("INCLUDE-FILE"),
+            StringLit("03_io.fth"),
             XT("INCLUDE-FILE"),
             StringLit("99_test.fth"),
             XT("INCLUDE-FILE"),

@@ -45,17 +45,26 @@ variable holdend
   <0 if [char] - hold then
 ;
 
-\ words to display numbers
-: ud. <# #s #> type space ;
-: d. dup -rot dabs <# #s rot sign #> type space ;
-: u. 0 ud. ;
-: . s>d d. ;
-
-: .s \ display the WHOLE stack
-  depth
-  [char] < emit dup 0 <# #s #> type [char] > emit space
-  dup 0 ?do
-    dup i - pick .
-  loop
-  drop
+: allot ( n -- )
+  here + cp !
 ;
+
+: cmove ( c-addr1 c-addr2 u -- )
+  0 ?do
+    over c@ over c!
+    1+ swap 1+ swap
+  loop
+  2drop
+;
+
+: s" ( -- ) \ bake a string literal into a colon word
+  [char] " parse \ read the quote-delimited string
+  >r >r
+  postpone ahead
+  r> here tuck r@ cmove \ bake in the string
+  r@ allot align \ reserve space for the string
+  >r
+  postpone then
+  r> r> swap
+  postpone literal postpone literal \ bake in the addr + length
+; immediate

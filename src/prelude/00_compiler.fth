@@ -94,7 +94,6 @@ LATEST !
 41 , \ ascii ")". The LIT word will return this value at interpretation time.
 ' PARSE , \ Read from input (this file) until we find that character.
 ' 2DROP , \ PARSE returns a string, but we don't need it so we can throw it out
-' PARSE-NAME , ' 2DROP , \ and consume the next space-delimited word, which IS the )
 ' EXIT ,
 
 \ I'm tired of looking up ASCII values

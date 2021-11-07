@@ -1279,7 +1279,10 @@ impl Compiler {
     }
 
     fn get_execution_token(&self, name: &str) -> i32 {
-        *self.execution_tokens.get(name).unwrap()
+        match self.execution_tokens.get(name) {
+            Some(xt) => *xt,
+            None => panic!("Could not find definition for \"{}\"", name),
+        }
     }
 
     fn define_word(&mut self, name: &str, code: u32, parameter: &[u8]) {

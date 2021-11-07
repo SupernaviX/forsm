@@ -8,6 +8,17 @@ cr test
   [char] ( emit test [char] ) emit
 ;
 
+: test-string
+  cr s" Hello world!" type
+;
+
+: test-print-string
+  cr ." Kalloo kallay o frabjous day!"
+;
+
+test-string
+test-print-string
+
 cr test
 
 cr parse-name flibbertigibbet type

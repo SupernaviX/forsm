@@ -6,6 +6,7 @@
 
 \ Conditionals!
 : if postpone ?branch >mark ; immediate
+: ahead postpone branch >mark ; immediate
 : else postpone branch >mark swap >resolve ; immediate
 : then >resolve ; immediate
 
