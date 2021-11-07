@@ -56,6 +56,19 @@ impl Runtime {
         }
     }
 
+    #[cfg(test)]
+    pub fn pop_string(&self) -> Result<String> {
+        let len = self.pop()?;
+        let start = self.pop()?;
+
+        let start = start as usize;
+        let end = start + len as usize;
+        let view = &self.memory()?[start..end];
+        let bytes: Vec<u8> = view.iter().map(|c| c.get()).collect();
+        let string = str::from_utf8(&bytes)?;
+        Ok(string.to_string())
+    }
+
     pub fn execute(&self, word: &str) -> Result<()> {
         let word = self.instance.exports.get_function(word)?;
         let result = word.call(&[])?;

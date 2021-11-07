@@ -3,7 +3,7 @@ use forsm::build_interpreter;
 
 fn main() -> Result<()> {
     let interpreter = build_interpreter()?;
-    let result = interpreter.run_directory("./src/prelude")?;
+    let result = interpreter.start()?;
     println!("{}", result);
     Ok(())
 }

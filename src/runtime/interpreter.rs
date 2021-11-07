@@ -1,4 +1,4 @@
-use std::{fs, str};
+use std::str;
 
 use anyhow::{anyhow, Result};
 use wasmer_wasi::{Pipe, WasiEnv, WasiStateBuilder};
@@ -22,14 +22,15 @@ impl InterpreterRuntime {
         Ok(Self { wasi_env, runtime })
     }
 
-    pub fn run_directory(&self, dir: &str) -> Result<String> {
-        let entries = fs::read_dir(dir)?;
-        let mut output = vec![];
-        for entry in entries {
-            let name = entry?.file_name().into_string().unwrap();
-            output.push(self.interpret(&format!("PARSE-NAME {} INCLUDE-FILE", name))?);
+    pub fn start(&self) -> Result<String> {
+        self.execute("_start")?;
+        // assert no errors
+        self.execute("ERROR@")?;
+        let error = self.pop()?;
+        if error != 0 {
+            return Err(anyhow!("Interpretation threw {}", error));
         }
-        Ok(output.join(""))
+        self.read_output()
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {

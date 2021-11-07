@@ -579,6 +579,20 @@ fn build_interpreter(compiler: &mut Compiler) {
         ],
     );
 
+    compiler.define_colon_word(
+        "_start",
+        vec![
+            StringLit("00_compiler.fth"),
+            XT("INCLUDE-FILE"),
+            StringLit("01_controlflow.fth"),
+            XT("INCLUDE-FILE"),
+            StringLit("02_io.fth"),
+            XT("INCLUDE-FILE"),
+            StringLit("99_test.fth"),
+            XT("INCLUDE-FILE"),
+        ],
+    );
+
     // Very basic main loop
     compiler.define_colon_word(
         "QUIT",

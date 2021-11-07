@@ -10,6 +10,7 @@ use std::collections::HashMap;
 pub enum ColonValue {
     XT(&'static str),
     Lit(i32),
+    StringLit(&'static str),
     Branch(i32),
     QBranch(i32),
 }
@@ -108,6 +109,21 @@ impl Compiler {
                     cp += 8;
                     bytes.extend_from_slice(&lit_xt.to_le_bytes());
                     bytes.extend_from_slice(&value.to_le_bytes());
+                }
+                ColonValue::StringLit(value) => {
+                    let data_start = cp + 8;
+                    let data_len = value.len() as i32;
+                    let padding = required_padding(data_len);
+                    let target = data_start + data_len + padding;
+                    cp = target + 16;
+                    bytes.extend_from_slice(&branch_xt.to_le_bytes());
+                    bytes.extend_from_slice(&target.to_le_bytes());
+                    bytes.extend_from_slice(value.as_bytes());
+                    bytes.extend_from_slice(&vec![0; padding as usize]);
+                    bytes.extend_from_slice(&lit_xt.to_le_bytes());
+                    bytes.extend_from_slice(&data_start.to_le_bytes());
+                    bytes.extend_from_slice(&lit_xt.to_le_bytes());
+                    bytes.extend_from_slice(&data_len.to_le_bytes());
                 }
                 ColonValue::Branch(offset) => {
                     cp += 8;
@@ -1664,6 +1680,17 @@ mod tests {
 
         runtime.execute("THREE").unwrap();
         assert_eq!(runtime.pop().unwrap(), 3);
+    }
+
+    #[test]
+    fn should_support_string_literals() {
+        let runtime = build(|compiler| {
+            compiler.define_colon_word("SOME-WORD", vec![StringLit("Hello world!")]);
+        })
+        .unwrap();
+
+        runtime.execute("SOME-WORD").unwrap();
+        assert_eq!(runtime.pop_string().unwrap(), "Hello world!");
     }
 
     #[test]
