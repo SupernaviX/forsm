@@ -40,8 +40,8 @@ variable do-sys
 : do ( target start -- )
   do-sys @
   postpone swap
-  <mark
   false do-sys !          \ no forward branching here
+  <mark
   postpone >r postpone >r
 ; immediate
 
@@ -49,9 +49,11 @@ variable do-sys
 : ?do ( target start -- )
   do-sys @
   postpone swap
+  postpone 2dup postpone =
+  postpone ?branch >mark
+  postpone 2drop postpone branch >mark do-sys ! \ possible forward branch here
+  >resolve
   <mark                   
-  postpone 2dup postpone <>
-  postpone ?branch >mark do-sys ! \ possible forward branch here
   postpone >r postpone >r
 ; immediate
 
