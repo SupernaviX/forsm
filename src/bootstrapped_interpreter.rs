@@ -11,7 +11,7 @@ pub fn build(compiler: &mut Compiler) {
             // store it
             XT("DUP"), XT("ERROR"), XT("!"),
             // halt control flow iff it is nonzero
-            QBranch(4), XT("STOP"),
+            QBranch(4), XT("BYE"),
         ],
     );
     compiler.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
@@ -597,20 +597,8 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("INCLUDE-FILE"),
             StringLit("03_io.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("99_test.fth"),
+            StringLit("FF_main.fth"),
             XT("INCLUDE-FILE"),
         ],
     );
-
-    // Very basic main loop
-    compiler.define_colon_word(
-        "QUIT",
-        vec![
-            XT("REFILL"),
-            QBranch(12),     // quit if we are done
-            XT("INTERPRET"), // run code
-            Branch(-24),     // Good! Now do it again
-            XT("STOP"),      // stop execution when we are done
-        ],
-    )
 }

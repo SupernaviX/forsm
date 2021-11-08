@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::str;
 
 use anyhow::{anyhow, Result};
@@ -34,16 +36,10 @@ impl InterpreterRuntime {
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {
-        self.write_input(input)?;
-        self.execute("QUIT")?;
-
-        // assert no errors
-        self.execute("ERROR@")?;
-        let error = self.pop()?;
-        if error != 0 {
-            return Err(anyhow!("Interpretation threw {}", error));
-        }
-        self.read_output()
+        self.write_input(&format!("{} BYE", input))?;
+        let result = self.start()?;
+        // get the prompt out of there
+        Ok(result.lines().skip(1).collect::<Vec<&str>>().join("\n"))
     }
 
     pub fn write_input(&self, input: &str) -> Result<()> {
@@ -66,16 +62,8 @@ impl InterpreterRuntime {
         self.runtime.push(value)
     }
 
-    pub fn push_double(&self, value: i64) -> Result<()> {
-        self.runtime.push_double(value)
-    }
-
     pub fn pop(&self) -> Result<i32> {
         self.runtime.pop()
-    }
-
-    pub fn pop_double(&self) -> Result<i64> {
-        self.runtime.pop_double()
     }
 
     pub fn push_string(&self, start: i32, string: &str) -> Result<()> {

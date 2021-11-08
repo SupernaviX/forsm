@@ -5,18 +5,23 @@ mod runtime;
 
 use anyhow::Result;
 use compiler::Compiler;
-use runtime::InterpreterRuntime;
 
-pub fn build_interpreter() -> Result<InterpreterRuntime> {
+pub fn compile_interpreter() -> Result<Vec<u8>> {
     let mut compiler = Compiler::default();
     bootstrapped_interpreter::build(&mut compiler);
-    let binary = compiler.compile()?;
-    InterpreterRuntime::new(&binary)
+    compiler.compile()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::build_interpreter;
+    use super::compile_interpreter;
+    use super::runtime::InterpreterRuntime;
+    use anyhow::Result;
+
+    fn build_interpreter() -> Result<InterpreterRuntime> {
+        let binary = compile_interpreter()?;
+        InterpreterRuntime::new(&binary)
+    }
 
     #[test]
     fn should_parse_string() {

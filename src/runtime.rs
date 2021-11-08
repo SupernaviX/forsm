@@ -1,3 +1,4 @@
+#![cfg(test)]
 use std::str;
 
 mod interpreter;
