@@ -92,3 +92,47 @@ variable do-sys
 ; immediate
 
 : i ( -- n ) postpone r@ ; immediate
+
+variable catch-depth
+
+: catch ( xt -- thrown )
+  catch-depth @ >r \ store the old catch depth in the return stack
+  r-depth catch-depth ! \ store the size of the return stack as the new catch depth
+  execute \ run the code
+  \ we only execute below this part if all goes well
+  r> catch-depth ! \ restore the old catch depth
+  0 \ return 0 because nothing went wrong
+;
+: throw ( err -- )
+  dup =0 if
+    drop exit \ do nothing if all is well
+  then
+  \ get the return stack back to the state it was in in "catch"
+  begin r-depth catch-depth @ > while r> drop repeat
+  \ we are now effectively "inside" catch again
+  r> catch-depth ! \ restore the old catch depth
+  \ now that we've messed with the return stack, we're actually returning from "catch"
+;
+
+\ exceptions!
+variable catch-depth
+
+: catch ( xt -- thrown )
+  catch-depth @ >r \ store the old catch depth in the return stack
+  r-depth catch-depth ! \ store the size of the return stack as the new catch depth
+  execute \ run the code
+  \ we only execute below this part if all goes well
+  r> catch-depth ! \ restore the old catch depth
+  0 \ return 0 because nothing went wrong
+;
+: throw ( err -- )
+  dup =0 if
+    drop exit \ do nothing if all is well
+  then
+  \ get the return stack back to the state it was in in "catch"
+  begin r-depth catch-depth @ > while r> drop repeat
+  \ we are now effectively "inside" catch again
+  r> catch-depth ! \ restore the old catch depth
+  \ now that we've messed with the return stack, we're actually returning from "catch"
+;
+

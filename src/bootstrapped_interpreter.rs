@@ -597,6 +597,8 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("INCLUDE-FILE"),
             StringLit("03_io.fth"),
             XT("INCLUDE-FILE"),
+            StringLit("04_interpreter.fth"),
+            XT("INCLUDE-FILE"),
             StringLit("FF_main.fth"),
             XT("INCLUDE-FILE"),
         ],

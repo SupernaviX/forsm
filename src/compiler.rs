@@ -543,9 +543,16 @@ impl Compiler {
             vec![GetGlobal(r_stack), I32Load(2, 0), Call(push)],
         );
         self.define_native_word(
-            "R-CLEAR",
+            "R-DEPTH",
             vec![],
-            vec![I32Const(RETURN_STACK_BASE), SetGlobal(r_stack)],
+            vec![
+                I32Const(RETURN_STACK_BASE),
+                GetGlobal(r_stack),
+                I32Sub,
+                I32Const(2),
+                I32ShrU,
+                Call(push),
+            ],
         );
     }
 

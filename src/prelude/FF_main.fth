@@ -1,13 +1,18 @@
 : quit
-  r-clear
+  begin r-depth while r> drop repeat
   0 >source-id !
   0 >in !
   postpone [
   begin
     refill
   while
-    interpret
-    state @ =0 if space ." ok" cr then
+    ['] interpret catch
+    dup if
+      ." Threw exception " . cr
+    else
+      drop
+      state @ =0 if space ." ok" cr then
+    then
   repeat
   bye
 ;
