@@ -7,7 +7,7 @@
     refill
   while
     interpret
-    space ." ok" cr
+    state @ =0 if space ." ok" cr then
   repeat
   bye
 ;

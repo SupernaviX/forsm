@@ -167,6 +167,12 @@ impl Assembler {
         for (field, func) in self.exported_functions.iter() {
             builder = builder.export().field(field).internal().func(*func).build();
         }
+        builder = builder
+            .export()
+            .field("__indirect_function_table")
+            .internal()
+            .table(0)
+            .build();
 
         let module = builder.build();
         let binary = serialize(module)?;

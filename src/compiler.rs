@@ -333,10 +333,13 @@ impl Compiler {
         self.push_r = push_r;
         self.pop_r = pop_r;
 
-        self.assembler.add_exported_func("push", push);
-        self.assembler.add_exported_func("pop", pop);
-        self.assembler.add_exported_func("push_d", push_d);
-        self.assembler.add_exported_func("pop_d", pop_d);
+        #[cfg(test)]
+        {
+            self.assembler.add_exported_func("push", push);
+            self.assembler.add_exported_func("pop", pop);
+            self.assembler.add_exported_func("push_d", push_d);
+            self.assembler.add_exported_func("pop_d", pop_d);
+        }
         self.define_native_word(
             "DUP",
             vec![],
@@ -1240,9 +1243,20 @@ impl Compiler {
         self.assembler
             .add_data(latest_storage_address, latest_bytes);
 
-        // For testing, export every word as a function-which-EXECUTEs-that-word
         let run_xt = self.get_execution_token("RUN-WORD");
-        for (word, xt) in self.execution_tokens.clone() {
+        #[cfg(test)]
+        let xts = {
+            // For testing, export every word as a function-which-EXECUTEs-that-word
+            self.execution_tokens.clone()
+        };
+        #[cfg(not(test))]
+        let xts = {
+            // Export _start, the conventional WASI entry point
+            let mut xts = HashMap::new();
+            xts.insert("_start".to_owned(), self.get_execution_token("_start"));
+            xts
+        };
+        for (word, xt) in xts {
             let func = self.assembler.add_native_func(
                 vec![],
                 vec![],
