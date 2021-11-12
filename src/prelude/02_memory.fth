@@ -10,6 +10,14 @@
   2drop
 ;
 
+: cell-move ( addr1 addr2 u -- )
+  2/ 2/ 0 ?do
+    over @ over !
+    4 + swap 4 + swap
+  loop
+  2drop
+;
+
 61696 constant heap-start
 65535 constant heap-max
 variable heap-end
@@ -73,6 +81,17 @@ heap-start heap-end !
   4 - \ move backwards to the header
   dup c@ 1 and
     if -1 swap +! 0  \ if this block is occupied, free it
-    else drop -4 \ otherwise you've double-freed and we should reurn an error
+    else drop -4 \ otherwise you've double-freed and we should return an error
     then  
+;
+
+: resize ( a-addr u -- a-addr err )
+  allocate
+  dup if nip exit else drop then  \ rethrow allocate's error
+  2dup \ keep a copy of the old and new addrs on the heap
+  over 4 - @ 1-
+  over 4 - @ min  \ find the amount to copy ( lesser of old or new size )
+  4 -             \ oh and also skip the header
+  cell-move
+  swap free \ rethrow free's error
 ;
