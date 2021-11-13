@@ -135,9 +135,15 @@ heap-start 4 + heap-end !
     then
 ;
 
+: freeable? ( a-addr -- ? )
+  dup block>used? <>0
+  over heap-start > and
+  swap heap-end @ < and
+;
+
 : free ( a-addr -- err )
   4 - \ move backwards to the header
-  dup block>used?
+  dup freeable?
     if free-block 0 \ if the block is occupied, free it
     else drop -4    \ otherwise you've double-freed, error
     then

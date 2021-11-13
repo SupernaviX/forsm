@@ -589,17 +589,17 @@ fn build_interpreter(compiler: &mut Compiler) {
     compiler.define_colon_word(
         "_start",
         vec![
-            StringLit("00_compiler.fth"),
+            StringLit("prelude/00_compiler.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("01_controlflow.fth"),
+            StringLit("prelude/01_controlflow.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("02_memory.fth"),
+            StringLit("prelude/02_memory.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("03_strings.fth"),
+            StringLit("prelude/03_strings.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("04_interpreter.fth"),
+            StringLit("prelude/04_interpreter.fth"),
             XT("INCLUDE-FILE"),
-            StringLit("FF_main.fth"),
+            StringLit("prelude/FF_main.fth"),
             XT("INCLUDE-FILE"),
         ],
     );
