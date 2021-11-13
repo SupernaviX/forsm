@@ -21,7 +21,9 @@
 61696 constant heap-start
 65535 constant heap-max
 variable heap-end
-heap-start heap-end !
+heap-start 4 + heap-end !
+5 heap-start ! \ start with an empty "block"
+5 heap-end @ ! \ end with one too
 
 : find-free-block ( u -- a-addr | 0 )
   >r heap-start
@@ -38,51 +40,78 @@ heap-start heap-end !
   drop r> drop 0
 ;
 
+\ Reserve a u-sized block at a-aadr with the given occupied flag
+\ blocks start and end with their size, plus an occupied flag in the low bit
+( a-addr u flag -- )
+: reserve-block
+  over >r
+  + 2dup swap !
+  swap r> + 4 - !
+;
+
+( a-addr -- )
+: use-block
+  dup @ 1 reserve-block
+;
+
 ( u -- a-addr err )
 : create-new-block
-  heap-end @            \ hold onto old heap-end, it's the return value
-  2dup + heap-max >     \ bounds check
-    if 2drop 0 -3 exit   \ error if we allocate too much
+  heap-end @ tuck       \ hold onto old heap end
+  over + heap-max >     \ bounds check
+    if drop -3 exit     \ error if we allocate too much
     then
-  over 1+ over !        \ add a header to heap-end
-  swap heap-end +!      \ point heap-end to the new end
+  2dup 1 reserve-block  \ create an occupied block at the end of the heap
+  over + dup heap-end ! \ end of that block is the end of the heap
+  5 swap !              \ add an empty "block" at the end
   4 + 0                 \ return a pointer AFTER the header, and no errors
 ;
 
-( u block-addr -- )
+( block-addr u -- )
 : split-existing-block
-  2dup @ swap - >r r@ 4 <=
-    if r> drop 2drop exit \ don't split if the new block would be too smol
-    then
-  tuck + r@ swap !  \ create a new block at the end of the old one
-  r> negate swap +!  \ shrink this block
+  >r
+  dup @ r@ - 4 <= \ don't split if the new block would be too smol
+    if use-block r> drop exit
+    then 
+  dup r@ + over @ r@ - 0 reserve-block \ new block at the end of the old one
+  r> 1 reserve-block   \ shrink the old one
 ;
 
-( block-addr -- a-addr err )
+( u block-addr -- a-addr err )
 : reuse-existing-block
-  1 over +!
+  tuck swap split-existing-block
   4 + 0
+;
+
+( block-addr -- )
+: free-block
+  dup @ 1-  ( start-addr size )
+  over 4 - @ dup 1 and =0 \ if the block before is free
+    if tuck + -rot - swap \ include it in bounds
+    else drop
+    then
+  2dup + @ dup 1 and =0   \ if the block after is free
+    if +                  \ include it in the length
+    else drop
+    then
+  0 reserve-block
 ;
 
 : allocate ( u -- a-addr err )
   aligned \ make sure the allocation is word-aligned, for performance
-  4 +     \ leave room for the header (which should also be word-aligned)
+  8 +     \ leave room for the header/footer (which should also be word-aligned)
   dup find-free-block
   dup =0
     if drop create-new-block
-    else
-      tuck
-      split-existing-block
-      reuse-existing-block
+    else reuse-existing-block
     then
 ;
 
-: free  ( a-addr -- err )
+: free ( a-addr -- err )
   4 - \ move backwards to the header
   dup c@ 1 and
-    if -1 swap +! 0  \ if this block is occupied, free it
-    else drop -4 \ otherwise you've double-freed and we should return an error
-    then  
+    if free-block 0 \ if the block is occupied, free it
+    else drop -4    \ otherwise you've double-freed, error
+    then
 ;
 
 : resize ( a-addr u -- a-addr err )
