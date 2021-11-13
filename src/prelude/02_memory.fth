@@ -35,14 +35,14 @@ heap-start 4 + heap-end !
     over r@ >= and   \ block is at least as big as the needful
       if drop r> drop exit
       then
-    1 xor +          \ on to the next block
+    -2 and +         \ on to the next block
   repeat
   drop r> drop 0
 ;
 
 \ Reserve a u-sized block at a-aadr with the given occupied flag
 \ blocks start and end with their size, plus an occupied flag in the low bit
-( a-addr u flag -- )
+( block-addr u flag -- )
 : reserve-block
   over >r
   + 2dup swap !
@@ -50,14 +50,33 @@ heap-start 4 + heap-end !
 ;
 
 \ mark a block as used
-( a-addr -- )
+( block-addr -- )
 : use-block
   dup @ 1 reserve-block
 ;
 
+\ given block dimensions (addr + size), include any preceding free blocks 
+( block-addr u -- block-addr u )
+: ?merge-before
+  over 4 - @ dup 1 and =0
+    if tuck + -rot - swap
+    else drop
+    then
+;
+
+\ given block dimensions (addr + size), include any following free blocks 
+( block-addr u -- block-addr u )
+( block-addr u -- block-addr u )
+: ?merge-after
+  2dup + @ dup 1 and =0
+    if +
+    else drop
+    then
+;
+
 \ reserve a u-sized block at the frontier,
 \ allocating more space if needed
-( u -- a-addr err )
+( u -- block-addr err )
 : frontier-block
   heap-end @                \ allocate at heap-end by default
   dup 4 - @ dup 1 and =0    \ if the final block is free
@@ -91,14 +110,8 @@ heap-start 4 + heap-end !
 ( block-addr -- )
 : free-block
   dup @ 1-  ( start-addr size )
-  over 4 - @ dup 1 and =0 \ if the block before is free
-    if tuck + -rot - swap \ include it in bounds
-    else drop
-    then
-  2dup + @ dup 1 and =0   \ if the block after is free
-    if +                  \ include it in the length
-    else drop
-    then
+  ?merge-before
+  ?merge-after
   0 reserve-block
 ;
 
