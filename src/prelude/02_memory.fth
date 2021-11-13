@@ -49,23 +49,29 @@ heap-start 4 + heap-end !
   swap r> + 4 - !
 ;
 
+\ mark a block as used
 ( a-addr -- )
 : use-block
   dup @ 1 reserve-block
 ;
 
+\ reserve a u-sized block at the frontier,
+\ allocating more space if needed
 ( u -- a-addr err )
-: create-new-block
-  heap-end @ tuck       \ hold onto old heap end
-  over + heap-max >     \ bounds check
-    if drop -3 exit     \ error if we allocate too much
+: frontier-block
+  heap-end @                \ allocate at heap-end by default
+  dup 4 - @ dup 1 and =0    \ if the final block is free
+    if - else drop then     \ incorporate it in the block we're reserving
+  2dup + heap-max >         \ bounds check
+    if 2drop -3 exit        \ error if we allocate too much
     then
-  2dup 1 reserve-block  \ create an occupied block at the end of the heap
-  over + dup heap-end ! \ end of that block is the end of the heap
-  5 swap !              \ add an empty "block" at the end
-  4 + 0                 \ return a pointer AFTER the header, and no errors
+  swap 2dup 1 reserve-block \ new block here
+  over + dup heap-end !     \ end of that block is the end of the heap
+  5 swap !                  \ empty "block" at the end
+  4 + 0                     \ return a-addr pointer and no errors
 ;
 
+\ Given a free block, make a new used block out of the first u bytes and a new free block out of the rest
 ( block-addr u -- )
 : split-existing-block
   >r
@@ -101,7 +107,7 @@ heap-start 4 + heap-end !
   8 +     \ leave room for the header/footer (which should also be word-aligned)
   dup find-free-block
   dup =0
-    if drop create-new-block
+    if drop frontier-block
     else reuse-existing-block
     then
 ;
