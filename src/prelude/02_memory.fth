@@ -1,6 +1,5 @@
-: allot ( n -- )
-  here + cp !
-;
+: allot ( n -- )  here + cp ! ;
+: cells ( n -- n )  2* 2* ;
 
 : cmove ( c-addr1 c-addr2 u -- )
   0 ?do
@@ -41,19 +40,18 @@ heap-start 4 + heap-end !
 ;
 
 \ Reserve a u-sized block at a-aadr with the given occupied flag
-\ blocks start and end with their size, plus an occupied flag in the low bit
-( block-addr u flag -- )
+\ blocks start and end with their size, plus flags in the low bits
+( block-addr u flags -- )
 : reserve-block
   over >r
   + 2dup swap !
   swap r> + 4 - !
 ;
 
-\ mark a block as used
-( block-addr -- )
-: use-block
-  dup @ 1 reserve-block
-;
+: block>used? ( block-addr -- ? ) c@ 1 and ;
+: block>end? ( block-addr -- ? )  c@ 2 and ;
+: block>size ( block-addr -- u )  @ -4 and ;
+: block>next ( block-addr -- block-addr ) dup block>size + ;
 
 \ given block dimensions (addr + size), include any preceding free blocks 
 ( block-addr u -- block-addr u )
@@ -65,7 +63,6 @@ heap-start 4 + heap-end !
 ;
 
 \ given block dimensions (addr + size), include any following free blocks 
-( block-addr u -- block-addr u )
 ( block-addr u -- block-addr u )
 : ?merge-after
   2dup + @ dup 1 and =0
@@ -80,36 +77,42 @@ heap-start 4 + heap-end !
   7 swap !
 ;
 
-\ reserve a u-sized block at the frontier,
-\ allocating more space if needed
-( u -- block-addr err )
-: frontier-block
-  heap-end @                \ allocate at heap-end by default
-  dup 4 - @ dup 1 and =0    \ if the final block is free
-    if - else drop then     \ incorporate it in the block we're reserving
-  2dup + heap-max >         \ bounds check
-    if 2drop -3 exit        \ error if we allocate too much
+\ (try to) shrink or grow the heap
+\ returns the old heap-end, and a did-we-fail bool
+( u -- block-addr failed? )
+: move-heap-end
+  heap-end @ tuck       \ allocate at heap-end
+  + dup heap-max >      \ bounds check
+    if drop -1          \ true if we allocate too much
+    else set-heap-end 0 \ otherwise update the heap end
     then
-  swap 2dup 1 reserve-block \ new block here
-  over + set-heap-end       \ end of that block is the end of the heap
-  4 + 0                     \ return a-addr pointer and no errors
+;
+
+\ reserve a u-sized block at the frontier
+( u -- block-addr failed? )
+: frontier-block
+  dup move-heap-end         \ try to allocate space
+    if nip -1 exit          \ error if we can't
+    then
+  tuck swap 1 reserve-block \ new used block here
+  0                         \ no errors
 ;
 
 \ Given a free block, make a new used block out of the first u bytes and a new free block out of the rest
 ( block-addr u -- )
 : split-existing-block
   >r
-  dup @ r@ - 4 <= \ don't split if the new block would be too smol
-    if use-block r> drop exit
-    then 
   dup r@ + over @ r@ - 0 reserve-block \ new block at the end of the old one
   r> 1 reserve-block   \ shrink the old one
 ;
 
-( u block-addr -- a-addr err )
-: reuse-existing-block
-  tuck swap split-existing-block
-  4 + 0
+( u -- block-addr failed? )
+: allocate-block
+  dup find-free-block
+  dup =0
+    if drop frontier-block
+    else tuck swap split-existing-block 0
+    then
 ;
 
 ( block-addr -- )
@@ -117,7 +120,7 @@ heap-start 4 + heap-end !
   dup @ 1-  ( start-addr size )
   ?merge-before
   ?merge-after
-  2dup + @ 2 and \ if the block after this is the heap end
+  2dup + block>end? \ if the block after this is the heap end
     if drop set-heap-end \ this is the heap end
     else 0 reserve-block \ this is just a free block
     then
@@ -126,28 +129,76 @@ heap-start 4 + heap-end !
 : allocate ( u -- a-addr err )
   aligned \ make sure the allocation is word-aligned, for performance
   8 +     \ leave room for the header/footer (which should also be word-aligned)
-  dup find-free-block
-  dup =0
-    if drop frontier-block
-    else reuse-existing-block
+  allocate-block =0
+    if 4 + 0  \ return a pointer past the header, and success
+    else -3   \ couldn't allocate, return an error
     then
 ;
 
 : free ( a-addr -- err )
   4 - \ move backwards to the header
-  dup c@ 1 and
+  dup block>used?
     if free-block 0 \ if the block is occupied, free it
     else drop -4    \ otherwise you've double-freed, error
     then
 ;
 
+: is-frontier? ( block-addr -- ? )
+  block>next block>end?
+;
+
+: resize-frontier ( block-addr u -- a-addr err )
+  2dup swap block>size - move-heap-end nip
+    if drop -3 throw exit   \ error if not enough space
+    then
+  over swap 1 reserve-block
+  4 + 0
+;
+
+: can-resize-inplace? ( block-addr u -- ? )
+  over block>next dup block>used? =0
+    if block>size - \ if the next block is free, we need less space
+    else drop
+    then
+  swap block>size <=
+;
+
+: resize-inplace ( block-addr u -- a-addr err )
+  >r dup
+  dup block>size ?merge-after ( block-addr block-addr size )
+  swap r@ + swap r@ - \ free the latter section
+    dup if 0 reserve-block
+    else 2drop  \ (don't free if it's empty of course)
+    then
+  dup r> 1 reserve-block  \ use the former section
+  4 + 0
+;
+
+: resize-reallocate ( block-addr u -- a-addr err )
+  over block>size over min 8 - >r \ remember how many bytes to copy
+  allocate-block
+    if \ if allocation failed, restore a known state
+      r> 2drop \ clean up the stack
+      4 + -3    \ return a pointer to the OG block, plus an error
+    else
+      4 +
+      over 4 + over r> cell-move \ copy old contents into new pointer
+      swap free-block \ free the OG block now that we are done with it
+      0     \ return a pointer to the new block, plus no error
+    then
+;
+
 : resize ( a-addr u -- a-addr err )
-  allocate
-  dup if nip exit else drop then  \ rethrow allocate's error
-  2dup \ keep a copy of the old and new addrs on the heap
-  over 4 - @ 1-
-  over 4 - @ min  \ find the amount to copy ( lesser of old or new size )
-  4 -             \ oh and also skip the header
-  cell-move
-  swap free \ rethrow free's error
+  swap 4 - \ look at head of block
+  dup block>used? =0
+    if drop -4 exit \ resize after free
+    then
+  swap aligned 8 + ( block-addr u )
+  over is-frontier?
+    if resize-frontier
+    else 2dup can-resize-inplace?
+      if resize-inplace
+      else resize-reallocate
+      then
+    then
 ;
