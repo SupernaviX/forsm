@@ -23,7 +23,7 @@
 variable heap-end
 heap-start 4 + heap-end !
 5 heap-start ! \ start with an empty "block"
-5 heap-end @ ! \ end with one too
+7 heap-end @ ! \ end with an empty "heap end" block
 
 : find-free-block ( u -- a-addr | 0 )
   >r heap-start
@@ -35,7 +35,7 @@ heap-start 4 + heap-end !
     over r@ >= and   \ block is at least as big as the needful
       if drop r> drop exit
       then
-    -2 and +         \ on to the next block
+    -4 and +         \ on to the next block
   repeat
   drop r> drop 0
 ;
@@ -74,6 +74,12 @@ heap-start 4 + heap-end !
     then
 ;
 
+( address -- )
+: set-heap-end
+  dup heap-end !
+  7 swap !
+;
+
 \ reserve a u-sized block at the frontier,
 \ allocating more space if needed
 ( u -- block-addr err )
@@ -85,8 +91,7 @@ heap-start 4 + heap-end !
     if 2drop -3 exit        \ error if we allocate too much
     then
   swap 2dup 1 reserve-block \ new block here
-  over + dup heap-end !     \ end of that block is the end of the heap
-  5 swap !                  \ empty "block" at the end
+  over + set-heap-end       \ end of that block is the end of the heap
   4 + 0                     \ return a-addr pointer and no errors
 ;
 
@@ -112,7 +117,10 @@ heap-start 4 + heap-end !
   dup @ 1-  ( start-addr size )
   ?merge-before
   ?merge-after
-  0 reserve-block
+  2dup + @ 2 and \ if the block after this is the heap end
+    if drop set-heap-end \ this is the heap end
+    else 0 reserve-block \ this is just a free block
+    then
 ;
 
 : allocate ( u -- a-addr err )
