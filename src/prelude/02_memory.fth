@@ -2,17 +2,14 @@
 : cells ( n -- n )  2* 2* ;
 
 : cmove ( c-addr1 c-addr2 u -- )
-  0 ?do
-    over c@ over c!
-    1+ swap 1+ swap
-  loop
-  2drop
-;
-
-: cell-move ( addr1 addr2 u -- )
+  dup 3 and >r
   2/ 2/ 0 ?do
     over @ over !
     4 + swap 4 + swap
+  loop
+  r> 0 ?do
+    over c@ over c!
+    1+ swap 1+ swap
   loop
   2drop
 ;
@@ -171,7 +168,7 @@ heap-start 4 + heap-end !
       4 + -3    \ return a pointer to the OG block, plus an error
     else
       4 +
-      over 4 + over r> cell-move \ copy old contents into new pointer
+      over 4 + over r> cmove \ copy old contents into new pointer
       swap free-block \ free the OG block now that we are done with it
       0     \ return a pointer to the new block, plus no error
     then
