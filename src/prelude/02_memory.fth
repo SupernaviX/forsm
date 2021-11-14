@@ -126,27 +126,10 @@ heap-start 4 + heap-end !
     then
 ;
 
-: allocate ( u -- a-addr err )
-  aligned \ make sure the allocation is word-aligned, for performance
-  8 +     \ leave room for the header/footer (which should also be word-aligned)
-  allocate-block =0
-    if 4 + 0  \ return a pointer past the header, and success
-    else -3   \ couldn't allocate, return an error
-    then
-;
-
-: freeable? ( a-addr -- ? )
+: freeable? ( block-addr -- ? )
   dup block>used? <>0
   over heap-start > and
   swap heap-end @ < and
-;
-
-: free ( a-addr -- err )
-  4 - \ move backwards to the header
-  dup freeable?
-    if free-block 0 \ if the block is occupied, free it
-    else drop -4    \ otherwise you've double-freed, error
-    then
 ;
 
 : is-frontier? ( block-addr -- ? )
@@ -194,10 +177,30 @@ heap-start 4 + heap-end !
     then
 ;
 
+\ Allocate a u-sized block of memory on the heap
+: allocate ( u -- a-addr err )
+  aligned \ make sure the allocation is word-aligned, for performance
+  8 +     \ leave room for the header/footer (which should also be word-aligned)
+  allocate-block =0
+    if 4 + 0  \ return a pointer past the header, and success
+    else -3   \ couldn't allocate, return an error
+    then
+;
+
+\ Free some memory previously allocated on the heap
+: free ( a-addr -- err )
+  4 - \ move backwards to the header
+  dup freeable?
+    if free-block 0 \ if the block is occupied, free it
+    else drop -4    \ otherwise you've double-freed, error
+    then
+;
+
+\ Change the bounds of some previously-allocated memory
 : resize ( a-addr u -- a-addr err )
   swap 4 - \ look at head of block
-  dup block>used? =0
-    if drop -4 exit \ resize after free
+  dup freeable? =0
+    if drop -4 exit \ can't resize what you can't free
     then
   swap aligned 8 + ( block-addr u )
   over is-frontier?

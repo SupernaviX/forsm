@@ -1,5 +1,16 @@
+create test-name 80 allot
+variable #test-name
+
+: \test ( rest of the line is the test name )
+  -1 parse 80 min ( c-addr u )
+  dup #test-name !
+  test-name swap cmove
+  cr ." Testing: " test-name #test-name @ type
+;
+
 : assert-eq ( actual expected -- )
   2dup = if 2drop exit then
+  cr ." Test failed: " test-name #test-name @ type
   cr ." expected: " . ." actual: " .
   cr ." stack: " .s
   cr bye
@@ -9,18 +20,19 @@
   0 assert-eq
 ;
 
-\ test erroring when you ask for too damn much memory
+\test erroring when you ask for too damn much memory
 13379001401 allocate -3 assert-eq drop
-\ test erroring when you double-free
+
+\test erroring when you double-free
 cr .s
 1 allocate assert-0
 cr .s
 dup free assert-0
 cr .s
-free -3 assert-eq
+free -4 assert-eq
 cr .s
 
-cr \ test allocate and free
+cr \test allocate and free
 cr heap-end @ .
 1 allocate assert-0
 cr heap-end @ .
@@ -38,7 +50,7 @@ free assert-0
 cr .s
 cr heap-end @ .
 
-cr \ test resizing at the frontier
+cr \test resizing at the frontier
 cr 8 allocate assert-0 .s
 cr dup 4 - @ .
 cr 16 resize assert-0 .s
@@ -50,7 +62,7 @@ cr dup 4 - @ .
 free assert-0
 cr heap-end @ .
 
-cr \ test resizing in-place
+cr \test resizing in-place
 8 allocate assert-0
 1024 allocate assert-0
 8 allocate assert-0
@@ -78,7 +90,7 @@ free assert-0
 cr heap-end @ .
 .s
 
-cr \ test reallocation
+cr \test reallocation
 32 allocate assert-0
 32 allocate assert-0
 swap
@@ -97,3 +109,5 @@ dup 3 cells + @ 69 assert-eq
 free assert-0
 free assert-0
 cr heap-end @ .
+
+bye
