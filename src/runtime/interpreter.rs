@@ -39,7 +39,7 @@ impl InterpreterRuntime {
         self.write_input(&format!("{} BYE", input))?;
         let result = self.start()?;
         // get the prompt out of there
-        Ok(result.lines().skip(1).collect::<Vec<&str>>().join("\n"))
+        Ok(result.lines().skip(2).collect::<Vec<&str>>().join("\n"))
     }
 
     pub fn write_input(&self, input: &str) -> Result<()> {

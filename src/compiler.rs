@@ -68,7 +68,14 @@ pub struct Compiler {
     execution_tokens: HashMap<String, i32>,
 }
 
+const DICTIONARY_BASE: i32 = 0x1000;
+const PARAM_STACK_BASE: i32 = 0xf000;
+const RETURN_STACK_BASE: i32 = 0xf080;
+
+const DICTIONARY_CAPACITY: i32 = PARAM_STACK_BASE - DICTIONARY_BASE;
+
 const ALIGNMENT: i32 = 4;
+
 fn required_padding(offset: i32) -> i32 {
     -offset & (ALIGNMENT - 1)
 }
@@ -237,17 +244,16 @@ impl Compiler {
         self.define_execution();
         self.define_math();
 
-        // Define CP and LATEST variables now
-        // We don't have their real values yet, but other code needs to reference them
-        self.define_variable_word("CP", 0);
-        self.define_variable_word("LATEST", 0);
+        // Define dictionary-related words here as well
+        // We don't have some real values yet, but other code needs to reference them
+        self.define_constant_word("DICT-BASE", DICTIONARY_BASE);
+        self.define_constant_word("DICT-CAPACITY", DICTIONARY_CAPACITY);
+        self.define_variable_word("CP", DICTIONARY_BASE);
+        self.define_variable_word("LATEST", DICTIONARY_BASE);
         self
     }
 
     fn define_stacks(&mut self) {
-        const PARAM_STACK_BASE: i32 = 0xf080;
-        const RETURN_STACK_BASE: i32 = 0xf000;
-
         let define_stack = |assembler: &mut Assembler, stack| {
             let push_instructions = vec![
                 // decrement stack pointer
@@ -1360,7 +1366,7 @@ impl Default for Compiler {
             docol: 0,
             start: 0,
             ip: 0,
-            cp: 0x1000,
+            cp: DICTIONARY_BASE,
             latest_address: 0,
             execution_tokens: HashMap::new(),
         }
