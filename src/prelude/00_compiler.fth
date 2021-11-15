@@ -226,6 +226,9 @@ CREATE ;
   LATEST @ NAME>XT ,
 ; IMMEDIATE
 
+\ ">BODY" gives you the address of a word defined with CREATE
+: >BODY ( xt -- addr ) 4 + ;
+
 \ "DOES>" lets you customize the runtime behavior of words you CREATEd.
 : DOES>
   POSTPONE LIT

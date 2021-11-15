@@ -1,77 +1,28 @@
 32 constant bl
-: cr 10 emit ;
-: space bl emit ;
 
-\ get the ascii value of the next character
-: char parse-name drop c@ ;
-\ compile the ascii value of the next char into the current def
-: [char] parse-name drop c@ postpone literal ; immediate
-
-\ quick numeric utilities
-: pad here 340 + ;
-variable holdptr
-variable holdend
-
-: <# \ start formatting a number
-  pad dup holdptr ! holdend !
+\ "adjust" the head of a string. Like a more dangerous substring
+: /string ( c-addr1 u1 n -- c-addr2 u2 )
+  tuck - -rot + swap
 ;
 
-: #> \ stop formatting a number, return the string
-  2drop holdptr @ holdend @ holdptr @ -
-;
-
-: hold \ include 1 character
-  -1 holdptr +! \ reserve some space
-  holdptr @ C! \ and write the char
-;
-
-: # \ include one digit
-  base @ ud/mod rot
-  dup 9 <=
-    if [char] 0 +
-    else [ char A 10 - ] literal +
-    then
-  hold
-;
-
-: #s \ include all remaining digits
-  begin
-    #
-    2dup or =0
-  until
-;
-
-: sign \ include a - if the number is negative
-  <0 if [char] - hold then
-;
-
-: s" ( -- ) \ bake a string literal into a colon word
-  [char] " parse \ read the quote-delimited string
-  >r >r
-  postpone ahead
-  r> here tuck r@ cmove \ bake in the string
-  r@ allot align \ reserve space for the string
+\ return the substring of the input starting with c ( if any )
+: scan ( c-addr1 u1 c -- c-addr2 u2 )
   >r
-  postpone then
-  r> r> swap
-  postpone literal postpone literal \ bake in the addr + length
-; immediate
-
-\ words to display numbers
-: ud. <# #s #> type space ;
-: d. dup -rot dabs <# #s rot sign #> type space ;
-: u. 0 ud. ;
-: . s>d d. ;
-
-: .s \ display the WHOLE stack
-  depth
-  [char] < emit dup 0 <# #s #> type [char] > emit space
-  dup 0 ?do
-    dup i - pick .
-  loop
-  drop
+  begin dup
+  while over c@ r@ <>
+  while 1 /string
+  repeat
+  then
+  r> drop
 ;
 
-: ." \ display an string
-  postpone s" postpone type
-; immediate
+\ return the substring of the input after any leading c ( if any )
+: remove-start ( c-addr1 u1 c -- c-addr2 u2 )
+  >r
+  begin dup
+  while over c@ r@ =
+  while 1 /string
+  repeat
+  then
+  r> drop
+;
