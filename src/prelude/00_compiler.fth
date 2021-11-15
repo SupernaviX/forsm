@@ -225,3 +225,13 @@ CREATE ;
 : RECURSE
   LATEST @ NAME>XT ,
 ; IMMEDIATE
+
+\ "DOES>" lets you customize the runtime behavior of words you CREATEd.
+: DOES>
+  POSTPONE LIT
+  HERE 0 , \ leave a gap (and track the address) for the new callable we're compiling
+  POSTPONE XT, \ use that as the XT of whichever word was just created
+  POSTPONE EXIT \ compile-time word over, runtime word begins
+  \ now HERE is at the address of the runtime word, so we can fill in that gap
+  (DODOES) HERE 8 LSHIFT OR SWAP !
+; IMMEDIATE

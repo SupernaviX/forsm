@@ -88,6 +88,19 @@ impl Assembler {
         });
     }
 
+    pub fn add_type(&mut self, params: Vec<ValueType>, results: Vec<ValueType>) -> u32 {
+        let mut idx = 0;
+        let sig = signature()
+            .with_params(params)
+            .with_results(results)
+            .build_sig();
+        self.update(|mut builder| {
+            idx = builder.push_signature(sig);
+            builder
+        });
+        idx
+    }
+
     pub fn add_data(&mut self, offset: i32, value: Vec<u8>) {
         self.update(|builder| builder.data().offset(I32Const(offset)).value(value).build());
     }

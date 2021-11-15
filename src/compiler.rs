@@ -183,7 +183,7 @@ impl Compiler {
         let locals = if results.is_empty() {
             vec![]
         } else {
-            vec![ValueType::I32, ValueType::I64]
+            vec![ValueType::I64]
         };
         let mut instructions = vec![];
         if !params.is_empty() {
@@ -447,7 +447,7 @@ impl Compiler {
         );
         self.define_native_word(
             "TUCK",
-            vec![ValueType::I32],
+            vec![],
             vec![
                 GetGlobal(stack),
                 I32Const(4),
@@ -620,24 +620,34 @@ impl Compiler {
         let stopped = self.add_global(0);
 
         // "execute" takes an XT as a parameter and runs it
+        let callable_sig = self
+            .assembler
+            .add_type(vec![ValueType::I32, ValueType::I32], vec![]);
         let execute = self.assembler.add_native_func(
             vec![ValueType::I32],
             vec![],
-            vec![],
+            vec![ValueType::I32],
             vec![
                 // The argument is an execution token (XT).
-                // In this system, an execution token is the 32-bit address of a table index,
-                // with the parameter data (if any) stored immediately after it.
-                // Call the func with the address of the parameter data.
+                // In this system, an execution token is a 32-bit address.
+                // The low 8 bits of the value are a table index,
+                // and the rest are a 24-bit "immediate" value.
+                // Any parameter data is stored immediately after it.
+                // Call the func with:
+                // arg0: the address of the parameter data.
+                // arg1: the immediate
                 GetLocal(0),
                 I32Const(4),
                 I32Add,
                 GetLocal(0),
                 I32Load(2, 0),
-                // h4x: the first parameter of call_indirect is a type index
-                // and this library doesn't expose those. BUT push is the first-defined function
-                // and it has the right type signature, so 0 works for the type index
-                CallIndirect(0, 0),
+                TeeLocal(1),
+                I32Const(8),
+                I32ShrU, // top 24 bits are arg1
+                GetLocal(1),
+                I32Const(255),
+                I32And, // bottom 8 bits are the func index
+                CallIndirect(callable_sig, 0),
                 End,
             ],
         );
@@ -699,6 +709,27 @@ impl Compiler {
                 SetGlobal(ip),
             ],
         );
+
+        // DODOES is what lets you customize runtime behavior of a word.
+        // It does what DOCOL does, except it also pushes a word onto the stack.
+        let dodoes = self.create_native_callable(
+            vec![],
+            vec![
+                // push the head of our parameter onto the stack
+                GetLocal(0),
+                Call(push),
+                // push IP onto the return stack
+                GetGlobal(ip),
+                Call(push_r),
+                // Set IP to our immediate
+                GetLocal(1),
+                I32Const(4),
+                I32Sub,
+                SetGlobal(ip),
+            ],
+        );
+        self.define_constant_word("(DODOES)", dodoes as i32);
+
         self.define_native_word(
             "LIT",
             vec![],
@@ -770,9 +801,9 @@ impl Compiler {
             vec![
                 //swap the top of the stack before calling the real ops
                 Call(pop_d),
-                SetLocal(1),
+                SetLocal(2),
                 Call(pop_d),
-                GetLocal(1),
+                GetLocal(2),
             ]
         };
         let binary_i32 = |op| {
@@ -806,7 +837,7 @@ impl Compiler {
         );
         self.define_native_word(
             "ABS",
-            vec![ValueType::I32],
+            vec![],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -835,13 +866,13 @@ impl Compiler {
             vec![ValueType::I64, ValueType::I64],
             vec![
                 Call(pop_d),
-                TeeLocal(1),
+                TeeLocal(2),
                 I64Const(63),
                 I64ShrS,
-                TeeLocal(2),
-                GetLocal(1),
-                I64Xor,
+                TeeLocal(3),
                 GetLocal(2),
+                I64Xor,
+                GetLocal(3),
                 I64Sub,
                 Call(push_d),
             ],
@@ -916,15 +947,15 @@ impl Compiler {
             vec![
                 Call(pop),
                 I64ExtendSI32,
-                SetLocal(2),
+                SetLocal(3),
                 Call(pop_d),
-                TeeLocal(1),
-                GetLocal(2),
+                TeeLocal(2),
+                GetLocal(3),
                 I64RemU,
                 I32WrapI64,
                 Call(push),
-                GetLocal(1),
                 GetLocal(2),
+                GetLocal(3),
                 I64DivU,
                 I32WrapI64,
                 Call(push),
@@ -933,12 +964,7 @@ impl Compiler {
 
         self.define_native_word(
             "/MOD",
-            vec![
-                ValueType::I32,
-                ValueType::I32,
-                ValueType::I32,
-                ValueType::I32,
-            ],
+            vec![ValueType::I32, ValueType::I32, ValueType::I32],
             vec![
                 Call(pop),
                 SetLocal(2),
@@ -978,7 +1004,7 @@ impl Compiler {
 
         self.define_native_word(
             "U/MOD",
-            vec![ValueType::I32],
+            vec![],
             vec![
                 Call(pop),
                 SetLocal(1),
@@ -1000,15 +1026,15 @@ impl Compiler {
             vec![
                 Call(pop),
                 I64ExtendSI32,
-                SetLocal(2),
+                SetLocal(3),
                 Call(pop_d),
-                TeeLocal(1),
-                GetLocal(2),
+                TeeLocal(2),
+                GetLocal(3),
                 I64RemS,
                 I32WrapI64,
                 Call(push),
-                GetLocal(1),
                 GetLocal(2),
+                GetLocal(3),
                 I64DivS,
                 I32WrapI64,
                 Call(push),
@@ -1026,21 +1052,21 @@ impl Compiler {
             vec![
                 Call(pop),
                 I64ExtendSI32,
-                SetLocal(2),
+                SetLocal(3),
                 Call(pop_d),
-                TeeLocal(1),
-                GetLocal(2),
-                I64DivS,
-                SetLocal(3), // store quotient for now
-                GetLocal(1),
-                GetLocal(2),
-                I64RemS,
-                SetLocal(4), // store remainder as well
-                // To find the "real" mod, subtract dividend if quotient is negative
-                GetLocal(4),
-                GetLocal(1),
-                I64Const(0),
+                TeeLocal(2),
                 GetLocal(3),
+                I64DivS,
+                SetLocal(4), // store quotient for now
+                GetLocal(2),
+                GetLocal(3),
+                I64RemS,
+                SetLocal(5), // store remainder as well
+                // To find the "real" mod, subtract dividend if quotient is negative
+                GetLocal(5),
+                GetLocal(2),
+                I64Const(0),
+                GetLocal(4),
                 I64Const(0),
                 I64LtS,
                 TeeLocal(0),
@@ -1049,7 +1075,7 @@ impl Compiler {
                 I32WrapI64,
                 Call(push),
                 // To find the "real" quotient, add 1 if it is negative
-                GetLocal(3),
+                GetLocal(4),
                 I64Const(1),
                 I64Const(0),
                 GetLocal(0),
@@ -1066,15 +1092,15 @@ impl Compiler {
             vec![
                 Call(pop),
                 I64ExtendSI32,
-                SetLocal(2),
+                SetLocal(3),
                 Call(pop_d),
-                TeeLocal(1),
-                GetLocal(2),
+                TeeLocal(2),
+                GetLocal(3),
                 I64RemU,
                 I32WrapI64,
                 Call(push),
-                GetLocal(1),
                 GetLocal(2),
+                GetLocal(3),
                 I64DivU,
                 Call(push_d),
             ],
@@ -1082,7 +1108,7 @@ impl Compiler {
 
         self.define_native_word(
             "MIN",
-            vec![ValueType::I32],
+            vec![],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -1097,7 +1123,7 @@ impl Compiler {
         );
         self.define_native_word(
             "MAX",
-            vec![ValueType::I32],
+            vec![],
             vec![
                 Call(pop),
                 TeeLocal(0),
@@ -1115,11 +1141,11 @@ impl Compiler {
             vec![ValueType::I64, ValueType::I64],
             vec![
                 Call(pop_d),
-                TeeLocal(1),
-                Call(pop_d),
                 TeeLocal(2),
-                GetLocal(1),
+                Call(pop_d),
+                TeeLocal(3),
                 GetLocal(2),
+                GetLocal(3),
                 I64LtS,
                 Select,
                 Call(push_d),
@@ -1130,11 +1156,11 @@ impl Compiler {
             vec![ValueType::I64, ValueType::I64],
             vec![
                 Call(pop_d),
-                TeeLocal(1),
-                Call(pop_d),
                 TeeLocal(2),
-                GetLocal(1),
+                Call(pop_d),
+                TeeLocal(3),
                 GetLocal(2),
+                GetLocal(3),
                 I64GtS,
                 Select,
                 Call(push_d),
@@ -1304,9 +1330,12 @@ impl Compiler {
         mut instructions: Vec<Instruction>,
     ) -> u32 {
         instructions.push(End);
-        let func =
-            self.assembler
-                .add_native_func(vec![ValueType::I32], vec![], locals, instructions);
+        let func = self.assembler.add_native_func(
+            vec![ValueType::I32, ValueType::I32],
+            vec![],
+            locals,
+            instructions,
+        );
         self.assembler.add_table_entry(func)
     }
 
