@@ -10,7 +10,7 @@ use std::collections::HashMap;
 pub enum ColonValue {
     XT(&'static str),
     Lit(i32),
-    StringLit(&'static str),
+    StringLit(String),
     Branch(i32),
     QBranch(i32),
 }
@@ -1749,7 +1749,7 @@ mod tests {
     #[test]
     fn should_support_string_literals() {
         let runtime = build(|compiler| {
-            compiler.define_colon_word("SOME-WORD", vec![StringLit("Hello world!")]);
+            compiler.define_colon_word("SOME-WORD", vec![StringLit("Hello world!".to_owned())]);
         })
         .unwrap();
 

@@ -586,25 +586,14 @@ fn build_interpreter(compiler: &mut Compiler) {
         ],
     );
 
-    compiler.define_colon_word(
-        "_start",
-        vec![
-            StringLit("prelude/00_compiler.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/01_core.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/02_memory.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/03_strings.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/04_parser.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/05_output.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/06_interpreter.fth"),
-            XT("INCLUDE-FILE"),
-            StringLit("prelude/FF_main.fth"),
-            XT("INCLUDE-FILE"),
-        ],
-    );
+    let start_instructions: Vec<_> = std::fs::read_dir("./src/prelude")
+        .unwrap()
+        .flat_map(|file| {
+            let raw_name = file.unwrap().file_name();
+            let name = format!("prelude/{}", raw_name.to_string_lossy());
+            vec![StringLit(name), XT("INCLUDE-FILE")]
+        })
+        .collect();
+
+    compiler.define_colon_word("_start", start_instructions);
 }
