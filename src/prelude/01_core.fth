@@ -110,7 +110,7 @@ variable chain-sys
 \ exit the loop early
 : leave
   postpone r> postpone r> postpone 2drop
-  postpone ?branch >mark-chain
+  postpone branch >mark-chain
 ; immediate
 
 : i ( -- n ) postpone r@ ; immediate
