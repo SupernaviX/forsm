@@ -8,28 +8,16 @@ defer source ( -- addr u )
 : parse-area ( -- c-addr u ) source >in @ /string ;
 : parse-consume ( n -- ) >in +! ;
 
-: length-while ( c-addr1 u1 c -- n )
-  over >r
-  remove-start
-  nip r> swap -
-;
-\ return new string and # of chars consumed
-: take-until ( c-addr1 u1 c -- c-addr2 u2 n )
-  over >r
-  scan
-  r> over -
-;
-
 : parse ( c -- c-addr u )
   >r
   parse-area over swap  \ store the parse-area start to return
   r@ take-until -rot \ compute the length and hold onto it
-  r> length-while ( c-addr u u-trailing )
+  r> prefix-length ( c-addr u u-trailing )
   over + parse-consume
 ;
 
 : parse-name ( -- c-addr u )
-  parse-area bl length-while parse-consume \ eat leading spaces
+  parse-area bl prefix-length parse-consume \ eat leading spaces
   bl parse
 ;
 

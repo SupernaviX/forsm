@@ -569,7 +569,7 @@ fn build_interpreter(compiler: &mut Compiler) {
     // include a file by path ( c-addr u -- )
     #[rustfmt::skip]
     compiler.define_colon_word(
-        "INCLUDE-FILE",
+        "INCLUDED",
         vec![
             XT("SOURCE-ID"), XT("THROW"),         // for now, can't load 2 files at once
             Lit(0), XT("OPEN-FILE"), XT("THROW"), // actually open the file
@@ -591,7 +591,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         .flat_map(|file| {
             let raw_name = file.unwrap().file_name();
             let name = format!("prelude/{}", raw_name.to_string_lossy());
-            vec![StringLit(name), XT("INCLUDE-FILE")]
+            vec![StringLit(name), XT("INCLUDED")]
         })
         .collect();
 
