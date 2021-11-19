@@ -41,14 +41,3 @@
   scan
   r> over -
 ;
-
-\ Return the first line of the input
-: first-line ( c-addr1 u1 -- c-addr1 u2 )
-  2dup
-  begin dup
-  while over c@ is-term? =0
-  while 1 /string
-  repeat
-  then
-  nip -
-;
