@@ -1202,6 +1202,27 @@ impl Compiler {
         self.define_native_word("LSHIFT", vec![], binary_i32(I32Shl));
         self.define_native_word("RSHIFT", vec![], binary_i32(I32ShrU));
 
+        // ( mask addr -- )
+        let bitmanip = |manip: Vec<Instruction>| {
+            let mut instructions = vec![
+                Call(pop),
+                TeeLocal(0),
+                GetLocal(0),
+                I32Load(2, 0),
+                Call(pop),
+            ];
+            instructions.extend_from_slice(&manip);
+            instructions.push(I32Store(2, 0));
+            instructions
+        };
+        self.define_native_word("CSET", vec![], bitmanip(vec![I32Or]));
+        self.define_native_word(
+            "CRESET",
+            vec![],
+            bitmanip(vec![I32Const(-1), I32Xor, I32And]),
+        );
+        self.define_native_word("CTOGGLE", vec![], bitmanip(vec![I32Xor]));
+
         self.define_native_word(
             "2*",
             vec![],
@@ -1591,6 +1612,35 @@ mod tests {
         runtime.push(2).unwrap();
         runtime.execute("MAX").unwrap();
         assert_eq!(runtime.pop().unwrap(), 2);
+    }
+
+    #[test]
+    fn should_support_bit_manipulations() {
+        let runtime = build(|compiler| {
+            compiler.define_variable_word("TESTBITS", 0x30);
+        })
+        .unwrap();
+
+        runtime.push(0x0f).unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("CSET").unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("@").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0x3f);
+
+        runtime.push(0x03).unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("CRESET").unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("@").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0x3c);
+
+        runtime.push(0xcc).unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("CTOGGLE").unwrap();
+        runtime.execute("TESTBITS").unwrap();
+        runtime.execute("@").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0xf0);
     }
 
     #[test]

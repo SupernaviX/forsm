@@ -42,7 +42,7 @@ LATEST !
 2DROP 2DROP 2DROP
 
 CP @
-129 C,
+1 C,
 92 C,
 2 CP +!
 LATEST @ ,
@@ -50,6 +50,7 @@ LATEST !
 (DOCOL) ,
 ' LIT , -1 , ' PARSE , ' 2DROP ,
 ' EXIT ,
+LATEST @ +NAME>IMMEDIATE?
 
 \ Now I can write comments like this!
 
@@ -84,7 +85,7 @@ LATEST !
 
 \ inline comments sound nice too, I'll add those next
 HERE
-129 C,  \ This word is immediate (128) and has a 1-character name (+1).
+1 C,  \ This word has a 1-character name.
 40 C, \ ascii "("
 ALIGN
 LATEST @ ,
@@ -95,6 +96,7 @@ LATEST !
 ' PARSE , \ Read from input (this file) until we find that character.
 ' 2DROP , \ PARSE returns a string, but we don't need it so we can throw it out
 ' EXIT ,
+LATEST @ +NAME>IMMEDIATE? \ mark the word as immediate too
 
 \ I'm tired of looking up ASCII values
 \ Defining CREATE to add words to the dictionary, so I don't have to so often.
@@ -151,8 +153,7 @@ CREATE CONSTANT
 \ We need IMMEDIATE words to be able to shut the compiler off.
 CREATE IMMEDIATE
 (DOCOL) XT,
-' LIT , 128 ,
-' LATEST , ' @ ,  ' +! ,
+' LATEST , ' @ ,  ' +NAME>IMMEDIATE? ,
 ' EXIT ,
 
 \ The word ] starts compilation.
@@ -171,13 +172,13 @@ IMMEDIATE \ THIS has to be immediate, otherwise the compiler runs forever!
 \ The word HIDE hides the current definition from FIND-NAME
 CREATE HIDE
 (DOCOL) XT, ]
-  LATEST @ DUP C@ 32 OR SWAP C!
+  LATEST @ +NAME>HIDDEN?
 EXIT [
 
 \ The word REVEAL undoes HIDE
 CREATE REVEAL
 (DOCOL) XT, ]
-  LATEST @ DUP C@ 32 INVERT AND SWAP C!
+  LATEST @ -NAME>HIDDEN?
 EXIT [
 
 \ The word : starts a colon definition (hence the name)
