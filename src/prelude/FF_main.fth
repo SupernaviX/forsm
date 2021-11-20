@@ -7,10 +7,9 @@
     refill
   while
     ['] interpret catch
-    dup if
+    ?dup if
       ." Threw exception " . cr
     else
-      drop
       state @ =0 if space ." ok" cr then
     then
   repeat

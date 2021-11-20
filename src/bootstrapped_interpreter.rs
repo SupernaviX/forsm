@@ -171,7 +171,7 @@ fn build_io(compiler: &mut Compiler) {
             // store the buffer in our ciovec
             XT("SWAP"), XT("CIOVEC"), XT("!"),
             // start of loop
-            XT("DUP"), XT(">0"), QBranch(88), // while we have bytes to write..
+            XT("?DUP"), XT(">0"), QBranch(88), // while we have bytes to write..
             // try to write U bytes to the file
             XT("DUP"), XT("CIOVEC"), Lit(4), XT("+"), XT("!"),
             Lit(1), XT("CIOVEC"), Lit(1), XT("BYTES-WRITTEN"), XT("FD-WRITE"), XT("THROW"),
@@ -182,7 +182,7 @@ fn build_io(compiler: &mut Compiler) {
             XT("-"),
             // and start again
             Branch(-104),
-            XT("DROP") // we're done! just clean up
+            // we're done!
         ],
     );
 
@@ -390,7 +390,7 @@ fn build_interpreter(compiler: &mut Compiler) {
 
             // stack is now ( c-addr1 c-addr2 u )
             // start of loop
-            XT("DUP"), XT("<>0"), QBranch(96), // if length is 0, break outta the loop
+            XT("?DUP"), QBranch(96), // if length is 0, break outta the loop
 
             XT(">R"), // push length into return stack
             XT("OVER"), XT("C@"), XT("UPCHAR"), XT("OVER"), XT("C@"), XT("<>"), // are chars not-equal?
@@ -402,9 +402,9 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("R>"), XT("1-"), // get the count out of the return stack and decremented
             // then
 
-            Branch(-112), // end of loop
+            Branch(-108), // end of loop
 
-            XT("2DROP"), XT("DROP"), XT("TRUE"), // if we made it this far we win!
+            XT("2DROP"), XT("TRUE"), // if we made it this far we win!
         ],
     );
 
@@ -542,7 +542,7 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT("2DROP"), XT("EXIT"),
 
             XT("2DUP"), XT("FIND-NAME"), // look it up in the dictionary
-            XT("DUP"), XT("<>0"),
+            XT("?DUP"),
 
             QBranch(44), // if we found the word in the dictionary,
             XT("NIP"), XT("NIP"), // clean the name out of the stack, we're done with it
@@ -552,8 +552,7 @@ fn build_interpreter(compiler: &mut Compiler) {
             Branch(4),
             XT("INTERPRET-NAME"),
 
-            Branch(52), // if we did not find the word,
-            XT("DROP"), // clean stack of "xt"
+            Branch(48), // if we did not find the word,
             XT("?NUMBER"), // maybe it's a number?
             QBranch(24),  // if so, either bake the value in or leave it on the stack
             XT("COMPILING?"),
@@ -562,7 +561,7 @@ fn build_interpreter(compiler: &mut Compiler) {
             Branch(12), // if not, error and exit
             Lit(-1), XT("THROW"),
 
-            Branch(-156), // end of loop
+            Branch(-148), // end of loop
         ],
     );
 

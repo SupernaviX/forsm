@@ -15,7 +15,7 @@ filebufs filebufs filebuf>next !
 
 : filebuf-new ( fid -- err )
   filebuf-size allocate
-  dup if nip exit else drop then \ rethrow error
+  ?dup if nip exit then \ rethrow error
   tuck filebuf>fid !
   dup filebuf>data over filebuf>head !
   0 over filebuf>len !
@@ -60,7 +60,7 @@ create iovec 2 cells allot
 
 : filebuf-peek ( filebuf -- char|-1 err )
   dup filebuf-refill
-  dup if -1 swap exit else drop then
+  ?dup if -1 swap exit then
   dup filebuf>len @ =0
     if drop -1 0
     else filebuf>head @ c@ 0
@@ -75,25 +75,23 @@ create iovec 2 cells allot
 : open-file ( c-addr u fam -- fid err )
   \ the host has already defined a non-buffering version of this
   open-file
-  dup if exit else drop then \ rethrow error
+  ?dup if exit then \ rethrow error
   dup filebuf-new
 ;
 
 : close-file ( fid -- err )
   dup filebuf-delete
-  dup if exit else drop then
+  ?dup if exit then
   fd-close
 ;
 
 : read-line ( c-addr u1 fid -- u2 more? err )
   find-filebuf
-  dup =0
-    if drop -7 exit \ return an error if this file is unbuffered
-    then
+  ?dup =0 if -7 exit then  \ return an error if this file is unbuffered
   >r tuck \ store filebuf and OG length for later
   begin \ copy while we gotta
     r@ filebuf-peek
-    dup if nip r> drop exit else drop then \ rethrow error
+    ?dup if nip r> drop exit then \ rethrow error
     over \ while we are still reading to the buffer
     over -1 <> and \ and the last char wasn't EOF
     over is-term? =0 and \ and we haven't found a line terminator
@@ -106,7 +104,7 @@ create iovec 2 cells allot
   swap is-term? over <>0 or ( u flag )
   begin \ discard newlines
     r@ filebuf-peek
-    dup if r> drop exit else drop then \ rethrow error
+    ?dup if r> drop exit then \ rethrow error
     is-term?
   while r@ filebuf-consume
   repeat

@@ -106,8 +106,8 @@ heap-start 4 + heap-end !
 ( u -- block-addr failed? )
 : allocate-block
   dup find-free-block
-  dup =0
-    if drop frontier-block
+  ?dup =0
+    if frontier-block
     else tuck swap split-existing-block 0
     then
 ;

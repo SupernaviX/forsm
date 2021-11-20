@@ -6,7 +6,7 @@
     then
 
     2dup find-name
-    dup <>0 if \ if we found the word in the dictionary,
+    ?dup if \ if we found the word in the dictionary,
       nip nip \ get rid of the name
       compiling? if
         compile-name
@@ -14,7 +14,6 @@
         interpret-name
       then
     else
-      drop
       ?number if \ if it's a number, either bake it in or leave it on the stack
         compiling? if
           compile-literal 

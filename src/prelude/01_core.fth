@@ -127,9 +127,7 @@ variable catch-depth
   0 \ return 0 because nothing went wrong
 ;
 : throw ( err -- )
-  dup =0 if
-    drop exit \ do nothing if all is well
-  then
+  ?dup =0 if exit then \ do nothing if all is well
   \ get the return stack back to the state it was in in "catch"
   begin r-depth catch-depth @ > while r> drop repeat
   \ we are now effectively "inside" catch again

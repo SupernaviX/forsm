@@ -357,6 +357,19 @@ impl Compiler {
             ],
         );
         self.define_native_word(
+            "?DUP",
+            vec![],
+            vec![
+                GetGlobal(stack),
+                I32Load(2, 0),
+                TeeLocal(0),
+                If(BlockType::NoResult),
+                GetLocal(0),
+                Call(push),
+                End,
+            ],
+        );
+        self.define_native_word(
             "2DUP",
             vec![],
             vec![
@@ -1635,6 +1648,24 @@ mod tests {
         runtime.execute("DUP").unwrap();
         assert_eq!(runtime.pop().unwrap(), 1);
         assert_eq!(runtime.pop().unwrap(), 1);
+    }
+
+    #[test]
+    fn should_conditionally_dup() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.push(1337).unwrap(); // sentinel value at bottom
+        runtime.push(1).unwrap();
+        runtime.execute("?DUP").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 1337);
+
+        runtime.push(1337).unwrap(); // sentinel value at bottom
+        runtime.push(0).unwrap();
+        runtime.execute("?DUP").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 0);
+        assert_eq!(runtime.pop().unwrap(), 1337);
     }
 
     #[test]
