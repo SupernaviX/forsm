@@ -239,3 +239,39 @@ CREATE ;
   \ now HERE is at the address of the runtime word, so we can fill in that gap
   (DODOES) HERE 8 LSHIFT OR SWAP !
 ; IMMEDIATE
+
+\ mark that we should use the host version of the most recent word WHILE bootstrapping,
+\ but use our own definition afterwards
+: HOST-DEFERRED
+  HERE LATEST @ ( latest old-latest )
+  \ copy the most recent definition name
+  DUP DUP NAME>U 1+ ALIGNED
+  [ HERE ] \ begin
+    SWAP DUP @ , \ copy 4 bytes to the new def
+    4 + SWAP 4 - \ increment pointer
+    DUP =0       \ any left?
+  ?BRANCH [ , ] \ until
+  2DROP    ( latest old-latest )
+  DUP ,   \ backword is our most recent definition
+  +NAME>HIDDEN? \ hide that definition from search
+  DUP NAME>STRING FIND-NAME \ find the OLD definition
+  OVER LATEST ! \ add this to the word-list
+  (DOCOL) , NAME>XT , \ and make this "deferred" word call that OLD definition
+  POSTPONE EXIT
+  +NAME>TRAMPOLINED?
+;
+
+\ Stop bootstrapping, use the passed-in XT as "main"
+( main-xt -- )
+: HOST-FINALIZE
+  LATEST @
+  [ HERE ]  \ begin
+    DUP NAME>TRAMPOLINED?
+    ?BRANCH [ HERE 0 , ]  \ if
+      \ update this one-word colon word to call the word before it instead
+      DUP NAME>BACKWORD NAME>XT OVER NAME>XT 4 + !
+    [ HERE SWAP ! ] \ then
+    NAME>BACKWORD ?DUP =0
+  ?BRANCH [ , ] \ until
+  EXECUTE
+;

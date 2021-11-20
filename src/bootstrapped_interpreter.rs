@@ -441,12 +441,18 @@ fn build_interpreter(compiler: &mut Compiler) {
         "NAME>IMMEDIATE?",
         vec![XT("C@"), Lit(128), XT("AND"), XT("<>0")],
     );
+    // given a name token, is that token trampolined to a host word? ( nt -- ? )
+    compiler.define_colon_word(
+        "NAME>TRAMPOLINED?",
+        vec![XT("C@"), Lit(64), XT("AND"), XT("<>0")],
+    );
     // given a name token, is that token hidden from search?
     compiler.define_colon_word(
         "NAME>HIDDEN?",
         vec![XT("C@"), Lit(32), XT("AND"), XT("<>0")],
     );
     compiler.define_colon_word("+NAME>IMMEDIATE?", vec![Lit(128), XT("SWAP"), XT("CSET")]);
+    compiler.define_colon_word("+NAME>TRAMPOLINED?", vec![Lit(64), XT("SWAP"), XT("CSET")]);
     compiler.define_colon_word("+NAME>HIDDEN?", vec![Lit(32), XT("SWAP"), XT("CSET")]);
     compiler.define_colon_word("-NAME>HIDDEN?", vec![Lit(32), XT("SWAP"), XT("CRESET")]);
 

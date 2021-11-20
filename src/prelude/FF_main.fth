@@ -24,4 +24,4 @@
   quit
 ;
 
-main
+' main host-finalize
