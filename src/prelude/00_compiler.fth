@@ -99,16 +99,15 @@ LATEST !
 LATEST @ +NAME>IMMEDIATE? \ mark the word as immediate too
 
 \ I'm tired of looking up ASCII values
-\ Defining CREATE to add words to the dictionary, so I don't have to so often.
+\ Defining HEADER to add a word to the dictionary, so I don't have to so often
 HERE
 6 C,
-67 C, 82 C, 69 C, 65 C, 84 C, 69 C, \ CREATE
+72 C, 69 C, 65 C, 68 C, 69 C, 82 C, \ HEADER ( c-addr u -- )
 ALIGN
 LATEST @ ,
 LATEST !
 (DOCOL) ,
-' CP , ' @ ,                \ Keep a pointer to the def's head on the stack
-' PARSE-NAME ,              \ CREATE reads the name of a new definition from input
+' HERE , ' -ROT ,       \ Keep a pointer to the def's head on the stack
 ' DUP , ' C, ,              \ Save the length of the name in the dictionary
 HERE                        \ This is the start of a loop. Pushing CP onto the stack to track where to jump back to later
 ' DUP , ' <>0 ,             \ If we're still parsing the word
@@ -126,6 +125,12 @@ HERE SWAP !                 \ Fill in the target of the forward jump, now that w
 ' EXIT ,
 
 \ Now it's even less wordy to define words!
+\ Add CREATE too, it parses a name and compiles a word for it.
+PARSE-NAME CREATE HEADER
+(DOCOL) LATEST @ NAME>XT !
+' PARSE-NAME , ' HEADER ,
+' EXIT ,
+
 \ Add a helper to set the XT of the currently-defined word
 ( xt -- )
 CREATE XT,

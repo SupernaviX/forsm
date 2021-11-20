@@ -134,13 +134,3 @@ variable catch-depth
   r> catch-depth ! \ restore the old catch depth
   \ now that we've messed with the return stack, we're actually returning from "catch"
 ;
-
-: noop ;
-
-\ define a word now, set what it does later
-: defer
-  create ['] noop ,
-  does> ( -- ) @ execute
-;
-
-: defer! ( xt deferred-xt -- ) >body ! ;
