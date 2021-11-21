@@ -81,18 +81,56 @@ create iovec 2 cells allot
   -1 swap filebuf>len +!
 ;
 
--1 constant r/o
-0 constant w/o
+4 constant init-dir-fd
+
+\ options bitmask
+1 constant fd-allow-read
+2 constant fd-allow-write
+4 constant fd-create
+
+: fd-oflags ( options -- oflags )
+  fd-allow-write fd-create or and
+    if 9 \ creat | trunc
+    else 0
+    then
+;
+
+: fd-rights ( options -- drights )
+  >r
+  0
+  r@ fd-allow-read and
+    if 1 or \ fd-read
+    then
+  r> fd-allow-write and
+    if 64 or \ fd-write
+    then
+  0
+;
+
+fd-allow-read constant r/o
+fd-allow-write constant w/o
+
+variable >fd
+: open-fd-by-path ( c-addr u options -- fid err )
+  >r \ hold onto options for l8r
+  init-dir-fd 0 2swap ( fid dirflags path-addr path-u )
+  r@ fd-oflags r> fd-rights 0 0 0 ( ... oflags drights-base drights-inheriting fdflags )
+  >fd path-open
+  >fd @ swap ( fid err )
+;
 
 : open-file ( c-addr u fam -- fid err )
-  \ the host has already defined a non-buffering version of this
   dup >r
-  open-file
+  open-fd-by-path
   ?dup if r> drop exit then \ rethrow error
-  r>
+  r> fd-allow-read and
     if dup filebuf-allocate
     else 0
     then
+;
+
+: create-file ( c-addr u fam -- fid err )
+  fd-create or open-file
 ;
 
 : close-file ( fid -- err )
