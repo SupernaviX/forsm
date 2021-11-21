@@ -73,6 +73,9 @@ create iovec 2 cells allot
   -1 swap filebuf>len +!
 ;
 
+\ TODO these words should probably do something 
+: r/o 0 ;
+
 : open-file ( c-addr u fam -- fid err )
   \ the host has already defined a non-buffering version of this
   open-file
@@ -81,8 +84,11 @@ create iovec 2 cells allot
 ;
 
 : close-file ( fid -- err )
-  dup filebuf-delete
-  ?dup if exit then
+  dup find-filebuf ?dup
+    if filebuf-delete ?dup
+      if nip exit
+      then
+    then
   fd-close
 ;
 

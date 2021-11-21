@@ -24,3 +24,36 @@
     then
   again
 ;
+
+: include-file ( fid -- )
+  add-file-source
+  begin refill
+  while
+    ['] interpret catch ?dup
+      if drop-source throw
+      then 
+  repeat
+  drop-source
+;
+
+: included ( c-addr u -- )
+  r/o open-file throw
+  include-file
+;
+
+: include ( -- ) parse-name included ;
+
+: quit
+  begin r-depth while r> drop repeat
+  reset-source
+  postpone [
+  begin refill
+  while
+    ['] interpret catch ?dup if
+      ." Threw exception " . cr
+    else
+      state @ =0 if space ." ok" cr then
+    then
+  repeat
+  bye
+;
