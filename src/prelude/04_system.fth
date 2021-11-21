@@ -13,9 +13,7 @@ create filebufs 3 cells allot \ only include header fields
 filebufs filebufs filebuf>prev !
 filebufs filebufs filebuf>next !
 
-: filebuf-new ( fid -- err )
-  filebuf-size allocate
-  ?dup if nip exit then \ rethrow error
+: filebuf-new ( fid addr -- )
   tuck filebuf>fid !
   dup filebuf>data over filebuf>head !
   0 over filebuf>len !
@@ -24,11 +22,21 @@ filebufs filebufs filebuf>next !
   filebufs filebuf>prev @ over filebuf>prev !
   dup filebufs filebuf>prev !
   dup filebuf>prev @ filebuf>next !
-  0
+;
+: filebuf-allot ( fid -- )
+  here
+  filebuf-size allot
+  filebuf-new
+;
+: filebuf-allocate ( fid -- err )
+  filebuf-size allocate ?dup
+    if nip nip
+    else filebuf-new 0
+    then
 ;
 
 \ file 0 (stdin) is already open, so add a buffer for it
-0 filebuf-new throw
+0 filebuf-allot
 
 : filebuf-delete ( filebuf -- err )
   \ link this filebuf's prev and next to each other
@@ -73,14 +81,18 @@ create iovec 2 cells allot
   -1 swap filebuf>len +!
 ;
 
-\ TODO these words should probably do something 
-: r/o 0 ;
+-1 constant r/o
+0 constant w/o
 
 : open-file ( c-addr u fam -- fid err )
   \ the host has already defined a non-buffering version of this
+  dup >r
   open-file
-  ?dup if exit then \ rethrow error
-  dup filebuf-new
+  ?dup if r> drop exit then \ rethrow error
+  r>
+    if dup filebuf-allocate
+    else 0
+    then
 ;
 
 : close-file ( fid -- err )
@@ -117,6 +129,38 @@ create iovec 2 cells allot
   r> drop 0
 ;
 
+create ciovec 2 cells allot
+variable >bytes-written
+: write-file ( c-addr u fid -- err )
+  rot ciovec ! swap ( fid u )
+  begin ?dup
+  while
+    dup ciovec 4 + ! \ save how many bytes to write
+    over ciovec 1 >bytes-written fd-write \ write bytes
+    ?dup if nip nip exit then \ rethrow error
+    >bytes-written @
+    dup ciovec +! \ however many bytes we wrote, move that far forward in the buffer
+    - \ and write that many fewer bytes next iteration
+  repeat
+  drop 0
+;
+
+variable emit-buffer
+: emit-file ( c fid -- err )
+  swap emit-buffer !
+  emit-buffer 1 rot write-file
+;
+
+: write-line ( c-addr u fid -- err )
+  dup >r
+  write-file ?dup =0
+    if 13 r> emit-file
+    else r> drop
+    then
+;
+
 : accept ( c-addr u1 -- u2 )
   0 read-line throw drop
 ;
+: emit ( c -- ) 1 emit-file throw ;
+: type ( c-addr u -- ) 1 write-file throw ;
