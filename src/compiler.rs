@@ -71,6 +71,7 @@ pub struct Compiler {
 const DICTIONARY_BASE: i32 = 0x1000;
 const PARAM_STACK_BASE: i32 = 0xf000;
 const RETURN_STACK_BASE: i32 = 0xf080;
+const HEAP_BASE: i32 = 0xf100;
 
 const DICTIONARY_CAPACITY: i32 = PARAM_STACK_BASE - DICTIONARY_BASE;
 
@@ -239,8 +240,7 @@ impl Compiler {
 
     fn initialize(mut self) -> Self {
         self.define_stacks();
-        self.define_constants();
-        self.define_variables();
+        self.define_memory();
         self.define_execution();
         self.define_math();
 
@@ -575,8 +575,11 @@ impl Compiler {
         );
     }
 
-    fn define_constants(&mut self) {
+    fn define_memory(&mut self) {
         let push = self.push;
+        let pop = self.pop;
+
+        // constants
         let docon = self.create_native_callable(
             vec![],
             vec![
@@ -588,11 +591,8 @@ impl Compiler {
         );
         self.docon = docon;
         self.define_constant_word("(DOCON)", docon as i32);
-    }
 
-    fn define_variables(&mut self) {
-        let push = self.push;
-        let pop = self.pop;
+        // variables
         let dovar = self.create_native_callable(
             vec![],
             vec![
@@ -620,6 +620,11 @@ impl Compiler {
         );
         self.define_native_word("C!", vec![], vec![Call(pop), Call(pop), I32Store8(0, 0)]);
         self.define_native_word("C@", vec![], vec![Call(pop), I32Load8U(0, 0), Call(push)]);
+
+        // heap words
+        self.define_constant_word("HEAP-BASE", HEAP_BASE);
+        self.define_native_word("MEMORY.SIZE", vec![], vec![CurrentMemory(0), Call(push)]);
+        self.define_native_word("MEMORY.GROW", vec![], vec![Call(pop), GrowMemory(0), Call(push)]);
     }
 
     fn define_execution(&mut self) {

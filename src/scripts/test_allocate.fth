@@ -1,38 +1,61 @@
 create test-name 80 allot
 variable #test-name
 
+: .test-name test-name #test-name @ type ;
+
+variable initial-depth
+variable initial-heap-end
+
 : \test ( rest of the line is the test name )
+  depth initial-depth !
+  heap-end @ initial-heap-end !
   -1 parse 80 min ( c-addr u )
   dup #test-name !
   test-name swap cmove
-  cr ." Testing: " test-name #test-name @ type
+  cr ." Testing: " .test-name
+;
+
+: "assert-eq ( actual expected c-addr u  -- )
+  2swap
+  2dup = if 2drop 2drop exit then
+  cr ." Test failed: " .test-name
+  2swap
+  dup if cr type else 2drop then
+  cr ." expected: " . ." actual: " .
+  cr ." stack: " .s
+  -1 throw
 ;
 
 : assert-eq ( actual expected -- )
-  2dup = if 2drop exit then
-  cr ." Test failed: " test-name #test-name @ type
-  cr ." expected: " . ." actual: " .
-  cr ." stack: " .s
-  cr bye
+  0 0 "assert-eq
 ;
 
 : assert-0 ( actual -- )
   0 assert-eq
 ;
 
+: \endtest
+  depth initial-depth @ s" The stack size has changed. " "assert-eq
+  cr ." Test passed: " .test-name
+  cr
+;
+
 \test erroring when you ask for too damn much memory
-13379001401 allocate -3 assert-eq drop
+1073676288 allocate -3 assert-eq drop
+\endtest
+
+\test growing the frontier
+65536 allocate assert-0
+free assert-0
+\endtest
 
 \test erroring when you double-free
-cr .s
 1 allocate assert-0
-cr .s
 dup free assert-0
-cr .s
 free -4 assert-eq
-cr .s
+\endtest
 
-cr \test allocate and free
+\test allocate and free
 cr heap-end @ .
 1 allocate assert-0
 cr heap-end @ .
@@ -49,8 +72,9 @@ cr .s
 free assert-0
 cr .s
 cr heap-end @ .
+\endtest
 
-cr \test resizing at the frontier
+\test resizing at the frontier
 cr 8 allocate assert-0 .s
 cr dup 4 - @ .
 cr 16 resize assert-0 .s
@@ -61,8 +85,9 @@ cr 64 resize assert-0 .s
 cr dup 4 - @ .
 free assert-0
 cr heap-end @ .
+\endtest
 
-cr \test resizing in-place
+\test resizing in-place
 8 allocate assert-0
 1024 allocate assert-0
 8 allocate assert-0
@@ -89,8 +114,9 @@ cr heap-end @ .
 free assert-0
 cr heap-end @ .
 .s
+\endtest
 
-cr \test reallocation
+\test reallocation
 32 allocate assert-0
 32 allocate assert-0
 swap
@@ -109,5 +135,6 @@ dup 3 cells + @ 69 assert-eq
 free assert-0
 free assert-0
 cr heap-end @ .
+\endtest
 
 bye

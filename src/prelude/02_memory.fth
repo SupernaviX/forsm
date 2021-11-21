@@ -14,15 +14,22 @@
   2drop
 ;
 
-61696 constant heap-start
-65535 constant heap-max
+: heap-limit ( -- addr ) memory.size 16 lshift 1 - ;
+: grow-heap-if-needed ( target-max -- failed? )
+  65535 + 16 rshift memory.size - \ find the number of pages to request
+  dup >0
+    if memory.grow -1 = \ wasm returns -1 on failure
+    else drop 0
+    then
+;
+
 variable heap-end
-heap-start 4 + heap-end !
-5 heap-start ! \ start with an empty "block"
+heap-base 4 + heap-end !
+5 heap-base !  \ start with an empty "block"
 7 heap-end @ ! \ end with an empty "heap end" block
 
 : find-free-block ( u -- a-addr | 0 )
-  >r heap-start
+  >r heap-base
   begin
     dup heap-end @ < \ loop while we are not at the end
   while
@@ -78,10 +85,10 @@ heap-start 4 + heap-end !
 \ returns the old heap-end, and a did-we-fail bool
 ( u -- block-addr failed? )
 : move-heap-end
-  heap-end @ tuck       \ allocate at heap-end
-  + dup heap-max >      \ bounds check
-    if drop -1          \ true if we allocate too much
-    else set-heap-end 0 \ otherwise update the heap end
+  heap-end @ tuck +     ( block-addr block-end )
+  dup grow-heap-if-needed
+    if drop -1
+    else set-heap-end 0
     then
 ;
 
@@ -125,7 +132,7 @@ heap-start 4 + heap-end !
 
 : freeable? ( block-addr -- ? )
   dup block>used? <>0
-  over heap-start > and
+  over heap-base > and
   swap heap-end @ < and
 ;
 
