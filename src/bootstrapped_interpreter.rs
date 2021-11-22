@@ -446,15 +446,13 @@ fn build_interpreter(compiler: &mut Compiler) {
         "NAME>TRAMPOLINED?",
         vec![XT("C@"), Lit(64), XT("AND"), XT("<>0")],
     );
-    // given a name token, is that token hidden from search?
-    compiler.define_colon_word(
-        "NAME>HIDDEN?",
-        vec![XT("C@"), Lit(32), XT("AND"), XT("<>0")],
-    );
     compiler.define_colon_word("+NAME>IMMEDIATE?", vec![Lit(128), XT("SWAP"), XT("CSET")]);
     compiler.define_colon_word("+NAME>TRAMPOLINED?", vec![Lit(64), XT("SWAP"), XT("CSET")]);
-    compiler.define_colon_word("+NAME>HIDDEN?", vec![Lit(32), XT("SWAP"), XT("CSET")]);
-    compiler.define_colon_word("-NAME>HIDDEN?", vec![Lit(32), XT("SWAP"), XT("CRESET")]);
+    // The "hidden bit" is the high bit of the first character of the identifier.
+    // This is always safe to use (even words with a 0-length name will have padding here),
+    // and automatically causes string equality checks for ASCII input to fail.
+    compiler.define_colon_word("+NAME>HIDDEN?", vec![Lit(32768), XT("SWAP"), XT("CSET")]);
+    compiler.define_colon_word("-NAME>HIDDEN?", vec![Lit(32768), XT("SWAP"), XT("CRESET")]);
 
     // given a name token, get the execution token ( nt -- xt )
     // xt is 1 + len + 4 bytes in to the definition, plus alignment
@@ -486,15 +484,13 @@ fn build_interpreter(compiler: &mut Compiler) {
             XT(">R"), XT("2DUP"), // set up copies of c-addr and u
             XT("R@"), XT("NAME>STRING"), // and extract the name from the nt
             XT("STR-UPPER-EQ?"),// Are they equal?
-            // XT("R@"), XT("@"), Lit(32), XT("AND"), XT("=0"), XT("AND"), // AND is the word not hidden?
-            XT("R@"), XT("NAME>HIDDEN?"), XT("=0"), XT("AND"), // AND is the word not hidden?
 
             QBranch(20), // this IS it chief!
             XT("2DROP"), // get rid of c-addr and u
             XT("R>"), XT("EXIT"), // return the address of the word
             Branch(8), // this ain't it chief
             XT("R>"), XT("NAME>BACKWORD"), // go to the previous def
-            Branch(-112), // end of loop
+            Branch(-96), // end of loop
         ],
     );
 
