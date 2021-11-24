@@ -41,3 +41,33 @@
   scan
   r> over -
 ;
+
+\ bake a string into a colon definition
+: sliteral ( c-addr u -- )
+  >r >r
+  postpone ahead
+  r> here tuck r@ cmove \ bake in the string
+  r@ allot align \ reserve space for the string
+  >r
+  postpone then
+  r> r> swap
+  postpone literal postpone literal \ bake in the addr + length
+; immediate
+
+create stemp-buffers 320 allot
+variable stemp-index
+0 stemp-index !
+
+: stemp-buffer ( -- c-addr )
+  stemp-buffers stemp-index @ 80 * + \ address of the current buffer
+  stemp-index @ 1+ 3 and stemp-index ! \ choose another buffer next time
+;
+
+\ store a string in a temporary buffer
+: stemp ( c-addr u -- c-addr u )
+  dup >r \ store length for later
+  stemp-buffer
+  dup >r \ store address for later
+  swap cmove \ copy to the buffer
+  r> r>
+;

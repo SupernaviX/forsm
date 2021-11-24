@@ -41,26 +41,14 @@ s" hello.wasm" w/o create-file throw outfile !
 
 16 base !
 
-0 compile-byte
-61 compile-byte
-73 compile-byte
-6d compile-byte
-1 compile-byte
-0 compile-byte
-0 compile-byte
-0 compile-byte
+s\" \zasm\x01\z\z\z" compile-bytes
 
 \ type section
 1 compile-byte
 8 compile-uint
 2 compile-byte \ two types
-60 compile-byte \ type 0: [i32] -> []
-1 compile-byte
-7f compile-byte
-0 compile-byte
-60 compile-byte \ type 1: [] -> []
-0 compile-byte
-0 compile-byte
+s\" \x60\x01\x7f\z" compile-bytes \ type 0: [i32] -> []
+s\" \x60\z\z" compile-bytes \ type 1: [] -> []
 
 \ import section
 2 compile-byte

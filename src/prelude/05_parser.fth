@@ -123,3 +123,48 @@ source-buffer0 'source-buffer !
 : variable ( -- ) create 0 , ;
 : constant ( val -- ) create (docon) xt, , ;
 : : create (docol) xt, hide ] ;
+
+ \ string literal
+ : s" ( -- c-addr u )
+  [char] " parse \ read the quote-delimited string
+  compiling?
+    if postpone sliteral
+    else stemp
+    then
+; immediate
+
+: bufwrite ( c-addr c -- c-addr )
+  over c! 1+
+;
+
+\ string literal but with escape chars
+: s\" ( -- c-addr u )
+  parse-area
+  stemp-buffer dup >r \ store head of buffer for l8r
+  swap 0 ?do ( src buffer )
+    over c@
+    dup [char] " = if drop 1 parse-consume leave then
+    dup [char] \ =
+      if
+        drop over 1+ c@
+        case
+          [char] b of 8 bufwrite 2 endof \ bs
+          [char] n of 10 bufwrite 2 endof \ nl
+          [char] q of 34 bufwrite 2 endof \ quote
+          [char] z of 0 bufwrite 2 endof \ null
+          [char] x of \ 2-digit hex literal
+            base @ >r 16 base ! \ switch to hex for a sec
+            over 2 + 2 ?number =0 throw \ parse a 2-digit hex number
+            r> base ! \ back to how we started
+            bufwrite 4
+          endof
+          ( default ) bufwrite 2 \ just write the char
+        endcase
+      else bufwrite 1
+      then ( .. src buffer' incr )
+    rot over + -rot ( .. src' buffer' incr )
+    dup parse-consume
+  +loop ( src' buffer' )
+  nip r> tuck - ( c-addr u )
+  compiling? if postpone sliteral then \ compile into a def if we're compiling
+; immediate

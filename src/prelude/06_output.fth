@@ -39,38 +39,6 @@ variable holdend
   <0 if [char] - hold then
 ;
 
-: sliteral ( c-addr u -- ) \ bake a string literal into a colon word
-  >r >r
-  postpone ahead
-  r> here tuck r@ cmove \ bake in the string
-  r@ allot align \ reserve space for the string
-  >r
-  postpone then
-  r> r> swap
-  postpone literal postpone literal \ bake in the addr + length
-;
-
-create stemp-buffer 320 allot
-variable stemp-index
-0 stemp-index !
-
-: stemp ( c-addr u -- c-addr u )
-  dup >r \ store length for later
-  stemp-buffer stemp-index @ 80 * + \ address of new string
-  dup >r \ store address for later
-  swap cmove \ copy to the buffer
-  stemp-index @ 1+ 3 and stemp-index ! \ choose another buffer next time
-  r> r>
-;
-
-: s" ( -- c-addr u ) \ string literal
-  [char] " parse \ read the quote-delimited string
-  compiling?
-    if sliteral
-    else stemp
-    then
-; immediate
-
 \ words to display numbers
 : ud. <# #s #> type space ;
 : d. dup -rot dabs <# #s rot sign #> type space ;
@@ -87,5 +55,9 @@ variable stemp-index
 ;
 
 : ." \ display an string
-  postpone s" postpone type
+  [char] " parse 
+  compiling?
+    if postpone sliteral postpone type
+    else type
+    then
 ; immediate
