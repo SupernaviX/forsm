@@ -31,7 +31,7 @@
 ;
 
 variable outfile
-s" hello.wasm" w/o create-file throw outfile !
+s" bin/hello.wasm" w/o create-file throw outfile !
 
 : compile-byte ( c -- ) outfile @ emit-file throw ;
 : compile-bytes ( c-addr u -- ) outfile @ write-file throw ;

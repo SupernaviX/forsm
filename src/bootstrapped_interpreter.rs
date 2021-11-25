@@ -600,7 +600,7 @@ fn build_interpreter(compiler: &mut Compiler) {
         .unwrap()
         .flat_map(|file| {
             let raw_name = file.unwrap().file_name();
-            let name = format!("prelude/{}", raw_name.to_string_lossy());
+            let name = format!("src/prelude/{}", raw_name.to_string_lossy());
             vec![StringLit(name), XT("INCLUDED")]
         })
         .collect();

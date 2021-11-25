@@ -17,7 +17,7 @@ impl InterpreterRuntime {
         let mut wasi_env = WasiStateBuilder::default()
             .stdin(Box::new(Pipe::new()))
             .stdout(Box::new(Pipe::new()))
-            .preopen_dir("./src")?
+            .preopen_dir(".")?
             .finalize()
             .unwrap();
         let runtime = Runtime::new(binary, |_, module| wasi_env.import_object(module).unwrap())?;
