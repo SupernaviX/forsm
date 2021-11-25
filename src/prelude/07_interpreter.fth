@@ -14,11 +14,13 @@
         interpret-name
       then
     else
-      ?number if \ if it's a number, either bake it in or leave it on the stack
+      2dup ?number if \ if it's a number, either bake it in or leave it on the stack
+        nip nip
         compiling? if
           compile-literal 
         then
       else
+        ." Unrecognized word: " type cr
         -14 throw
       then
     then
