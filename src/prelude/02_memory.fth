@@ -1,17 +1,31 @@
 : allot ( n -- )  here + cp ! ;
 : cells ( n -- n )  2* 2* ;
 
+\ copy start-to-end
 : cmove ( c-addr1 c-addr2 u -- )
-  dup 3 and >r
-  2/ 2/ 0 ?do
-    over @ over !
-    4 + swap 4 + swap
-  loop
-  r> 0 ?do
+  0 ?do
     over c@ over c!
     1+ swap 1+ swap
   loop
   2drop
+;
+
+\ copy end-to-start
+: cmove> ( c-addr1 c-addr2 u -- )
+  tuck 2swap + 1- -rot tuck + 1- swap \ move buffers to the end
+  0 ?do
+    over c@ over c!
+    1- swap 1- swap
+  loop
+  2drop
+;
+
+\ copy non-propagatingly
+: move ( c-addr1 c-addr2 u )
+  >r 2dup >= r> swap
+    if cmove
+    else cmove>
+    then
 ;
 
 : heap-limit ( -- addr ) memory.size 16 lshift 1 - ;

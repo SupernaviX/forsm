@@ -202,3 +202,40 @@ variable emit-buffer
 ;
 : emit ( c -- ) 1 emit-file throw ;
 : type ( c-addr u -- ) 1 write-file throw ;
+
+\ command-line arguments
+variable argc
+0 argc !
+variable argv
+
+: init-args ( -- )
+  argc @ if exit then
+  \ using argv to hold the buffer size temporarily
+  argc argv args-sizes-get throw
+  \ allot space for both argv and the strings it contains
+  here argc @ cells argv @ + aligned allot argv !
+  \ populate the args
+  argv @ dup argc @ cells + args-get throw
+;
+
+: arg ( n -- c-addr u )
+  dup argc @ >=
+    if drop 0 0 exit then
+  cells argv @ + @ ( c-addr )
+  \ find null terminator
+  dup begin dup c@ while 1+ repeat
+  over -
+;
+
+: shift-args ( -- )
+  argc @ 1 <= if exit then
+  argv @ 2 cells + \ copy from argv[2]
+  argv @ 1 cells + \ into argv[1]
+  argc @ 2 - cells \ copying this many bytes
+  move
+  -1 argc +!
+;
+
+: next-arg ( -- c-addr u )
+  1 arg shift-args
+;

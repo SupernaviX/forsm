@@ -22,6 +22,24 @@ pub fn build(compiler: &mut Compiler) {
 }
 
 fn build_io(compiler: &mut Compiler) {
+    // read arguments into a buffer
+    // ( >argv >argv-buf -- err )
+    compiler.define_imported_word(
+        "ARGS-GET",
+        "wasi_snapshot_preview1",
+        "args_get",
+        vec![I32, I32],
+        vec![I32],
+    );
+    // find the size of the buffer needed for ARGS-GET
+    // ( >argc >argv-buf-size -- err )
+    compiler.define_imported_word(
+        "ARGS-SIZES-GET",
+        "wasi_snapshot_preview1",
+        "args_sizes_get",
+        vec![I32, I32],
+        vec![I32],
+    );
     // read from an FD into a buffer
     // ( fid iovec-arr iovec-len >bytes-read -- err )
     compiler.define_imported_word(

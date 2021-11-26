@@ -1,4 +1,13 @@
+: parse-args
+  init-args
+  begin next-arg 2dup 0 0 d<>
+  while included
+  repeat
+  2drop
+;
+
 : main
+  parse-args
   ." Go forth! Type bye to quit" cr
   here dict-base -
   ." Dictionary size: " dup . ." bytes ("
