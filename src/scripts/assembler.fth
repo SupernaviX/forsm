@@ -136,3 +136,21 @@ buf-size 1 cells + constant vec-size
   dup program>start 8 r@ compile-section
   program>code 10 r> compile-vec-section
 ;
+
+: add-type ( c-addr u program -- )
+  program>type 1 over vec>size +!
+  push-bytes
+;
+
+: add-wasi-import ( c-addr u type program -- )
+  program>import >r
+  1 r@ vec>size +!
+  s" wasi_snapshot_preview1" r@ push-string
+  -rot r@ push-string \ encode the import name
+  0 r@ push-uint \ type is function
+  r> push-uint \ encode the function signature
+;
+
+: set-start ( index program -- )
+  program>start push-uint
+;

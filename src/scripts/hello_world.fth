@@ -4,23 +4,15 @@ create program program-size allot
 program init-program
 
 \ type section
-2 program program>type vec>size !
-s\" \x60\x01\x7f\z" program program>type push-bytes \ type 0: [i32] -> []
-s\" \x60\z\z" program program>type push-bytes \ type 1: [] -> []
+s\" \x60\x01\x7f\z" program add-type \ type 0: [i32] -> []
+s\" \x60\z\z" program add-type \ type 1: [] -> []
 
 \ import section
-1 program program>import vec>size !
-s" wasi_snapshot_preview1" program program>import push-string
-s" proc_exit" program program>import push-string
-0 program program>import push-uint \ function
-0 program program>import push-uint \ type 0
+s" proc_exit" 0 program add-wasi-import
 
 \ func section
 1 program program>func vec>size !
 1 program program>func push-uint \ type 1
-
-\ start section
-1 program program>start push-uint \ function 1
 
 \ code section
 16 base !
@@ -33,6 +25,9 @@ s" proc_exit" program program>import push-string
 0 program program>code push-uint \ function 0 (the import)
 0b program program>code push-byte \ end
 a base !
+
+\ start section
+1 program set-start \ function 1
 
 variable outfile
 s" bin/hello.wasm" w/o create-file throw outfile !
