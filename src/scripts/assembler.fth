@@ -172,8 +172,9 @@ a base !
 ;
 
 16 base !
-\ accepts signatures like "ss-d"
+\ accepts signatures like "{ss-d}"
 : parse-signature ( c-addr u -- c-addr u )
+  swap 1+ swap 2 - \ trim the curlies off 
   [char] - split 2swap
   compile-start
   60 compile-byte
@@ -210,4 +211,31 @@ a base !
   swap
   compile-start compile-uint compile-stop
   rot program>start push-bytes
+;
+
+16 base !
+: i32.const ( n -- )  41 compile-byte compile-sint ;
+: call ( u -- )       10 compile-byte compile-uint  ;
+: end ( -- )          0b compile-byte ;
+a base !
+
+: func: ( -- )
+  parse-name current-program @ +type
+  1 current-program @ program>func vec>size +!
+  current-program @ program>func push-uint
+  1 current-program @ program>code vec>size +!
+  compile-start
+  0 compile-uint \ no support for locals yet
+;
+
+: func; ( -- )
+  end compile-stop
+  current-program @ program>code push-string
+;
+
+: is-start ( -- )
+  current-program @
+  dup program>import vec>size @
+  over program>func vec>size @ + 1-
+  swap +start
 ;
