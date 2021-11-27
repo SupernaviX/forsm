@@ -1,4 +1,4 @@
-: allot ( n -- )  here + cp ! ;
+: allot ( n -- )  cp +! ;
 : cells ( n -- n )  2* 2* ;
 
 \ copy start-to-end

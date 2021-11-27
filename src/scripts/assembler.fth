@@ -30,7 +30,7 @@
   pad tuck -
 ;
 
-: compile-uint ( u fid -- )
+: write-uint ( u fid -- )
   swap uleb128 rot write-file throw
 ;
 
@@ -52,7 +52,7 @@
   dup buf>data @ rot resize throw \ grow the data
   swap buf>data ! \ store the grown data
 ;
-: compile-buf ( address fid -- )
+: write-buf ( address fid -- )
   over buf>data @ rot buf>len @ rot write-file throw
 ;
 
@@ -93,9 +93,9 @@ buf-size 1 cells + constant vec-size
   dup vec>size @ uleb128 nip
   swap buf>len @ +
 ;
-: compile-vec ( addr fid -- )
+: write-vec ( addr fid -- )
   2dup swap vec>size @ uleb128 rot write-file throw
-  compile-buf
+  write-buf
 ;
 4 vec-size * buf-size + constant program-size
 : program>type 0 vec-size * + ;
@@ -117,40 +117,94 @@ buf-size 1 cells + constant vec-size
   dup program>code free-vec
   program>start free-buf
 ;
-: compile-section ( address index fid -- )
-  tuck compile-uint
-  over buf>len @ over compile-uint
-  compile-buf
+: write-section ( address index fid -- )
+  tuck write-uint
+  over buf>len @ over write-uint
+  write-buf
 ;
-: compile-vec-section ( address index fid -- )
-  tuck compile-uint
-  over vec-length over compile-uint
-  compile-vec
+: write-vec-section ( address index fid -- )
+  tuck write-uint
+  over vec-length over write-uint
+  write-vec
 ;
-: compile-program ( address fid -- )
+: write-program ( address fid -- )
   >r
   s\" \zasm\x01\z\z\z" r@ write-file throw
-  dup program>type 1 r@ compile-vec-section
-  dup program>import 2 r@ compile-vec-section
-  dup program>func 3 r@ compile-vec-section
-  dup program>start 8 r@ compile-section
-  program>code 10 r> compile-vec-section
+  dup program>type 1 r@ write-vec-section
+  dup program>import 2 r@ write-vec-section
+  dup program>func 3 r@ write-vec-section
+  dup program>start 8 r@ write-section
+  program>code 10 r> write-vec-section
 ;
 
-: add-type ( c-addr u program -- )
-  program>type 1 over vec>size +!
-  push-bytes
+create compilebuf buf-size allot
+compilebuf 256 init-buf
+
+: compile-start ( -- ) 0 compilebuf buf>len ! ;
+: compile-stop ( -- c-addr u )
+  compilebuf buf>data @ compilebuf buf>len @
+;
+: compile-byte ( c -- ) compilebuf push-byte ;
+: compile-bytes ( c-addr u -- ) compilebuf push-bytes ;
+: compile-uint ( u -- ) uleb128 compile-bytes ;
+: compile-string ( c-addr u -- )
+  dup compile-uint
+  compile-bytes
+;
+16 base !
+: compile-primitive ( c -- )
+  case
+    [char] s of 7f compile-byte endof
+  endcase
+;
+a base !
+: compile-primitives ( c-addr u -- )
+  dup compile-uint
+  begin ?dup
+  while
+    over c@ compile-primitive
+    1 /string
+  repeat
+  drop
 ;
 
-: add-wasi-import ( c-addr u type program -- )
+16 base !
+\ accepts signatures like "ss-d"
+: parse-signature ( c-addr u -- c-addr u )
+  [char] - split 2swap
+  compile-start
+  60 compile-byte
+  compile-primitives
+  compile-primitives
+  compile-stop
+;
+a base !
+
+: +type ( c-addr u program -- index )
+  program>type >r
+  parse-signature r@ push-bytes
+  r@ vec>size @ dup 1+ r> vec>size !
+;
+
+: +wasi-import ( c-addr u type program -- )
   program>import >r
   1 r@ vec>size +!
-  s" wasi_snapshot_preview1" r@ push-string
-  -rot r@ push-string \ encode the import name
-  0 r@ push-uint \ type is function
-  r> push-uint \ encode the function signature
+  compile-start
+  s" wasi_snapshot_preview1" compile-string
+  -rot compile-string \ compile the import name
+  0 compile-uint      \ type is function
+  compile-uint        \ encode the function signature
+  compile-stop r> push-bytes
 ;
 
-: set-start ( index program -- )
-  program>start push-uint
+: wasi-import: ( program -- )
+  parse-name rot
+  dup parse-name rot +type
+  swap +wasi-import
+;
+
+: +start ( index program -- )
+  swap
+  compile-start compile-uint compile-stop
+  rot program>start push-bytes
 ;

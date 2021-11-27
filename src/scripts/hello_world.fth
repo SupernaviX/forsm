@@ -3,18 +3,13 @@ include src/scripts/assembler.fth
 create program program-size allot
 program init-program
 
-\ type section
-s\" \x60\x01\x7f\z" program add-type \ type 0: [i32] -> []
-s\" \x60\z\z" program add-type \ type 1: [] -> []
+\ imports
+program wasi-import: proc_exit s-
 
-\ import section
-s" proc_exit" 0 program add-wasi-import
-
-\ func section
+\ function
 1 program program>func vec>size !
-1 program program>func push-uint \ type 1
-
-\ code section
+s" -" program +type program program>func push-uint \ [] -> []
+\ code
 16 base !
 1 program program>code vec>size !
 7 program program>code push-uint \ size of function
@@ -27,12 +22,11 @@ s" proc_exit" 0 program add-wasi-import
 a base !
 
 \ start section
-1 program set-start \ function 1
+1 program +start \ function 1
 
 variable outfile
 s" bin/hello.wasm" w/o create-file throw outfile !
-
-program outfile @ compile-program
+program outfile @ write-program
 program free-program
 outfile close-file
 bye

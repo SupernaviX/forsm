@@ -30,6 +30,12 @@
   again
 ;
 
+: split ( c-addr1 u1 c -- c-addr2 u2 c-addr3 u3 )
+  >r 2dup r> scan
+  dup >r 2swap r> -
+  2swap 1 /string
+;
+
 variable term
 variable #term
 : search ( c-addr1 u1 c-addr2 u2 -- c-addr3 u3 flag )
