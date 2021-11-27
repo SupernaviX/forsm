@@ -1,6 +1,6 @@
-: uleb128 ( n -- c-addr u )
+: uleb128 ( u -- c-addr u )
   pad swap \ scratchpad to work on
-  begin ( pad n )
+  begin ( pad u )
     dup 127 and 
     swap 7 rshift swap 
     over if 128 or then
@@ -15,7 +15,7 @@
   pad swap
   begin ( pad n )
     dup 127 and
-    swap 7 rshift swap ( pad n' byte )
+    swap 7 arshift swap ( pad n' byte )
     over case \ we are done if the 7th bit of byte matches every bit of n'
       -1 of dup 64 and <>0 endof
       0 of dup 64 and =0 endof

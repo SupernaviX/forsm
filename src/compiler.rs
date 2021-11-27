@@ -1218,6 +1218,7 @@ impl Compiler {
         self.define_native_word("XOR", vec![], binary_i32(I32Xor));
         self.define_native_word("LSHIFT", vec![], binary_i32(I32Shl));
         self.define_native_word("RSHIFT", vec![], binary_i32(I32ShrU));
+        self.define_native_word("ARSHIFT", vec![], binary_i32(I32ShrS));
 
         // ( mask addr -- )
         let bitmanip = |manip: Vec<Instruction>| {
