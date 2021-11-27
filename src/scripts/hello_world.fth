@@ -5,11 +5,20 @@ program init-program
 program program!
 
 \ imports
-wasi-import: proc_exit {s-}
+wasi-import: proc_exit {c-}
 
-\ function
+\ functions
+func: {cc-c}
+  0 local.get
+  1 local.get
+  i32.add
+func;
+latest-func constant sum
+
 func: {-}
-  69 i32.const \ teehee
+  23 i32.const
+  46 i32.const
+  sum call
   0 call \ call function 0, which is proc_exit
 func; is-start
 

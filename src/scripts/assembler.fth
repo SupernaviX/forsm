@@ -46,6 +46,9 @@
 : free-buf ( buf -- )
   buf>data @ free throw
 ;
+: clear-buf ( buf -- )
+  0 swap buf>len !
+;
 : grow-buf ( buf -- )
   dup buf>capacity @ 2* swap \ get new capacity
   2dup buf>capacity ! \ track it
@@ -85,8 +88,11 @@ buf-size 1 cells + constant vec-size
   over 0 swap vec>size !
   init-buf
 ;
-: free-vec ( address -- ) free-buf ;
-
+: free-vec ( addr -- ) free-buf ;
+: clear-vec ( addr -- )
+  0 over vec>size !
+  clear-buf
+;
 \ length of the compiled vector in bytes
 : vec-length ( addr -- u )
   dup vec>size @ uleb128 nip
@@ -142,10 +148,11 @@ variable current-program
 create compilebuf buf-size allot
 compilebuf 256 init-buf
 
-: compile-start ( -- ) 0 compilebuf buf>len ! ;
+: compile-start ( -- ) compilebuf clear-buf ;
 : compile-stop ( -- c-addr u )
   compilebuf buf>data @ compilebuf buf>len @
 ;
+: uncompile ( u -- ) negate compilebuf buf>len +! ;
 : compile-byte ( c -- ) compilebuf push-byte ;
 : compile-bytes ( c-addr u -- ) compilebuf push-bytes ;
 : compile-uint ( u -- ) uleb128 compile-bytes ;
@@ -155,9 +162,11 @@ compilebuf 256 init-buf
   compile-bytes
 ;
 16 base !
-: compile-primitive ( c -- )
+: convert-primitive ( c -- c )
   case
-    [char] s of 7f compile-byte endof
+    [char] c of 7f endof
+    [char] d of 7e endof
+    ( default ) 420 throw \ unrecognized char
   endcase
 ;
 a base !
@@ -165,14 +174,14 @@ a base !
   dup compile-uint
   begin ?dup
   while
-    over c@ compile-primitive
+    over c@ convert-primitive compile-byte
     1 /string
   repeat
   drop
 ;
 
 16 base !
-\ accepts signatures like "{ss-d}"
+\ accepts signatures like "{cc-d}"
 : parse-signature ( c-addr u -- c-addr u )
   swap 1+ swap 2 - \ trim the curlies off 
   [char] - split 2swap
@@ -214,9 +223,16 @@ a base !
 ;
 
 16 base !
-: i32.const ( n -- )  41 compile-byte compile-sint ;
-: call ( u -- )       10 compile-byte compile-uint  ;
 : end ( -- )          0b compile-byte ;
+: call ( func -- )    10 compile-byte compile-uint ;
+: local.get ( u -- )  20 compile-byte compile-uint ;
+: local.set ( u -- )  21 compile-byte compile-uint ;
+: local.tee ( u -- )  22 compile-byte compile-uint ;
+: i32.const ( n -- )  41 compile-byte compile-sint ;
+: i32.add   ( -- )    6a compile-byte ;
+: i32.sub   ( -- )    6b compile-byte ;
+: i32.mul   ( -- )    6c compile-byte ;
+: i32.div_s ( -- )    6d compile-byte ;
 a base !
 
 : func: ( -- )
@@ -228,14 +244,34 @@ a base !
   0 compile-uint \ no support for locals yet
 ;
 
+create localvec vec-size allot
+localvec 16 init-vec
+: locals ( -- )
+  localvec clear-vec
+  parse-name \ looks like "ssdsd"
+  begin ?dup
+  while
+    1 localvec vec>size +!
+    over c@ >r
+    2dup r@ prefix-length
+    dup localvec push-uint /string
+    r> convert-primitive localvec push-byte
+  repeat drop
+  1 uncompile \ remove the "0 locals" we started with
+  localvec vec>size @ compile-uint
+  localvec buf>data @ localvec buf>len @ compile-bytes
+;
+
 : func; ( -- )
   end compile-stop
   current-program @ program>code push-string
 ;
 
-: is-start ( -- )
+: latest-func ( -- u )
   current-program @
   dup program>import vec>size @
-  over program>func vec>size @ + 1-
-  swap +start
+  swap program>func vec>size @ + 1-
+;
+: is-start ( -- )
+  latest-func current-program @ +start
 ;
