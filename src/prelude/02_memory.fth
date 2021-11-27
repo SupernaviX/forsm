@@ -69,7 +69,7 @@ heap-base 4 + heap-end !
 : block>used? ( block-addr -- ? ) c@ 1 and ;
 : block>end? ( block-addr -- ? )  c@ 2 and ;
 : block>size ( block-addr -- u )  @ -4 and ;
-: block>next ( block-addr -- block-addr ) dup block>size + ;
+: block.next ( block-addr -- block-addr ) dup block>size + ;
 
 \ given block dimensions (addr + size), include any preceding free blocks 
 ( block-addr u -- block-addr u )
@@ -151,7 +151,7 @@ heap-base 4 + heap-end !
 ;
 
 : is-frontier? ( block-addr -- ? )
-  block>next block>end?
+  block.next block>end?
 ;
 
 : resize-frontier ( block-addr u -- a-addr err )
@@ -163,7 +163,7 @@ heap-base 4 + heap-end !
 ;
 
 : can-resize-inplace? ( block-addr u -- ? )
-  over block>next dup block>used? =0
+  over block.next dup block>used? =0
     if block>size - \ if the next block is free, we need less space
     else drop
     then

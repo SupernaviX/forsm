@@ -1,35 +1,35 @@
-1024 constant filebuf-data-size
-5 cells filebuf-data-size + constant filebuf-size
-: filebuf>fid   0 cells + ;
-: filebuf>prev  1 cells + ;
-: filebuf>next  2 cells + ;
-: filebuf>head  3 cells + ;
-: filebuf>len   4 cells + ;
-: filebuf>data  5 cells + ;
+1024 constant |filebuf.data|
+5 cells |filebuf.data| + constant |filebuf|
+: filebuf.fid   0 cells + ;
+: filebuf.prev  1 cells + ;
+: filebuf.next  2 cells + ;
+: filebuf.head  3 cells + ;
+: filebuf.len   4 cells + ;
+: filebuf.data  5 cells + ;
 
 \ create a "dummy" filebuf on the stack
 create filebufs 3 cells allot \ only include header fields
--1 filebufs filebuf>fid !
-filebufs filebufs filebuf>prev !
-filebufs filebufs filebuf>next !
+-1 filebufs filebuf.fid !
+filebufs filebufs filebuf.prev !
+filebufs filebufs filebuf.next !
 
 : filebuf-new ( fid addr -- )
-  tuck filebuf>fid !
-  dup filebuf>data over filebuf>head !
-  0 over filebuf>len !
+  tuck filebuf.fid !
+  dup filebuf.data over filebuf.head !
+  0 over filebuf.len !
   \ link it into the list as the "prev" of the sentinel head
-  filebufs over filebuf>next !
-  filebufs filebuf>prev @ over filebuf>prev !
-  dup filebufs filebuf>prev !
-  dup filebuf>prev @ filebuf>next !
+  filebufs over filebuf.next !
+  filebufs filebuf.prev @ over filebuf.prev !
+  dup filebufs filebuf.prev !
+  dup filebuf.prev @ filebuf.next !
 ;
 : filebuf-allot ( fid -- )
   here
-  filebuf-size allot
+  |filebuf| allot
   filebuf-new
 ;
 : filebuf-allocate ( fid -- err )
-  filebuf-size allocate ?dup
+  |filebuf| allocate ?dup
     if nip nip
     else filebuf-new 0
     then
@@ -40,18 +40,18 @@ filebufs filebufs filebuf>next !
 
 : filebuf-delete ( filebuf -- err )
   \ link this filebuf's prev and next to each other
-  dup filebuf>next @ over filebuf>prev @ filebuf>next !
-  dup filebuf>prev @ over filebuf>next @ filebuf>prev !
+  dup filebuf.next @ over filebuf.prev @ filebuf.next !
+  dup filebuf.prev @ over filebuf.next @ filebuf.prev !
   free
 ;
 
 : find-filebuf ( fid -- filebuf | false )
-  filebufs filebuf>next @
+  filebufs filebuf.next @
   begin dup filebufs <>
   while
-    2dup filebuf>fid @ =
+    2dup filebuf.fid @ =
       if nip exit then
-    filebuf>next @
+    filebuf.next @
   repeat
   2drop false
 ;
@@ -60,25 +60,25 @@ create iovec 2 cells allot
 
 : filebuf-refill? ( filebuf -- err )
   dup >r
-  filebuf>len @
+  filebuf.len @
     if r> drop 0 exit  \ don't refill if the buffer has any data
     then
-  r@ filebuf>data r@ filebuf>head ! \ reset the head
-  r@ filebuf>data iovec !
-  filebuf-data-size iovec 4 + !
-  r@ filebuf>fid @ iovec 1 r> filebuf>len fd-read \ actually read from the file
+  r@ filebuf.data r@ filebuf.head ! \ reset the head
+  r@ filebuf.data iovec !
+  |filebuf.data| iovec 4 + !
+  r@ filebuf.fid @ iovec 1 r> filebuf.len fd-read \ actually read from the file
 ;
 
 : filebuf-peek ( filebuf -- char|-1 )
-  dup filebuf>len @ =0
+  dup filebuf.len @ =0
     if drop -1
-    else filebuf>head @ c@
+    else filebuf.head @ c@
     then
 ;
 
 : filebuf-consume ( filebuf -- )
-  1 over filebuf>head +!
-  -1 swap filebuf>len +!
+  1 over filebuf.head +!
+  -1 swap filebuf.len +!
 ;
 
 4 constant init-dir-fd

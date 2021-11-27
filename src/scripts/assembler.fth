@@ -34,45 +34,45 @@
   swap uleb128 rot write-file throw
 ;
 
-3 cells constant buf-size
-: buf>data      0 cells + ;
-: buf>len       1 cells + ;
-: buf>capacity  2 cells + ;
+3 cells constant |buf|
+: buf.data      0 cells + ;
+: buf.len       1 cells + ;
+: buf.capacity  2 cells + ;
 : init-buf ( address capacity -- )
-  2dup swap buf>capacity !
-  allocate throw over buf>data !
-  0 swap buf>len !
+  2dup swap buf.capacity !
+  allocate throw over buf.data !
+  0 swap buf.len !
 ;
 : free-buf ( buf -- )
-  buf>data @ free throw
+  buf.data @ free throw
 ;
 : clear-buf ( buf -- )
-  0 swap buf>len !
+  0 swap buf.len !
 ;
 : grow-buf ( buf -- )
-  dup buf>capacity @ 2* swap \ get new capacity
-  2dup buf>capacity ! \ track it
-  dup buf>data @ rot resize throw \ grow the data
-  swap buf>data ! \ store the grown data
+  dup buf.capacity @ 2* swap \ get new capacity
+  2dup buf.capacity ! \ track it
+  dup buf.data @ rot resize throw \ grow the data
+  swap buf.data ! \ store the grown data
 ;
 : write-buf ( address fid -- )
-  over buf>data @ rot buf>len @ rot write-file throw
+  over buf.data @ rot buf.len @ rot write-file throw
 ;
 
 : push-byte ( c buf -- )
-  dup buf>len @ 1+ over buf>capacity @ >
+  dup buf.len @ 1+ over buf.capacity @ >
     if dup grow-buf then
-  dup buf>data @ over buf>len @ + -rot \ hold onto copy target for l8r
-  1 swap buf>len +! \ increment length
+  dup buf.data @ over buf.len @ + -rot \ hold onto copy target for l8r
+  1 swap buf.len +! \ increment length
   swap c!
 ;
 : push-bytes ( c-addr u buf -- )
   begin
-    2dup buf>len @ + over buf>capacity @ >
+    2dup buf.len @ + over buf.capacity @ >
   while dup grow-buf
   repeat
-  dup buf>data @ over buf>len @ + -rot \ hold onto copy target for l8r
-  over swap buf>len +! \ increment length
+  dup buf.data @ over buf.len @ + -rot \ hold onto copy target for l8r
+  over swap buf.len +! \ increment length
   cmove
 ;
 
@@ -82,52 +82,52 @@
   swap push-bytes
 ;
 
-buf-size 1 cells + constant vec-size
-: vec>size    buf-size + ;
+|buf| 1 cells + constant |vec|
+: vec.size    |buf| + ;
 : init-vec ( address capacity -- )
-  over 0 swap vec>size !
+  over 0 swap vec.size !
   init-buf
 ;
 : free-vec ( addr -- ) free-buf ;
 : clear-vec ( addr -- )
-  0 over vec>size !
+  0 over vec.size !
   clear-buf
 ;
 \ length of the compiled vector in bytes
 : vec-length ( addr -- u )
-  dup vec>size @ uleb128 nip
-  swap buf>len @ +
+  dup vec.size @ uleb128 nip
+  swap buf.len @ +
 ;
 : write-vec ( addr fid -- )
-  2dup swap vec>size @ uleb128 rot write-file throw
+  2dup swap vec.size @ uleb128 rot write-file throw
   write-buf
 ;
 
 variable current-program
-4 vec-size * buf-size + constant program-size
-: program>type 0 vec-size * + ;
-: program>import 1 vec-size * + ;
-: program>func 2 vec-size * + ;
-: program>code 3 vec-size * + ;
-: program>start 4 vec-size * + ;
+4 |vec| * |buf| + constant |program|
+: program.type 0 |vec| * + ;
+: program.import 1 |vec| * + ;
+: program.func 2 |vec| * + ;
+: program.code 3 |vec| * + ;
+: program.start 4 |vec| * + ;
 : init-program ( address -- )
-  dup program>type 8 init-vec
-  dup program>import 32 init-vec
-  dup program>func 8 init-vec
-  dup program>code 8 init-vec
-  program>start 1 init-buf
+  dup program.type 8 init-vec
+  dup program.import 32 init-vec
+  dup program.func 8 init-vec
+  dup program.code 8 init-vec
+  program.start 1 init-buf
 ;
 : program! current-program ! ;
 : free-program ( address -- )
-  dup program>type free-vec
-  dup program>import free-vec
-  dup program>func free-vec
-  dup program>code free-vec
-  program>start free-buf
+  dup program.type free-vec
+  dup program.import free-vec
+  dup program.func free-vec
+  dup program.code free-vec
+  program.start free-buf
 ;
 : write-section ( address index fid -- )
   tuck write-uint
-  over buf>len @ over write-uint
+  over buf.len @ over write-uint
   write-buf
 ;
 : write-vec-section ( address index fid -- )
@@ -138,21 +138,21 @@ variable current-program
 : write-program ( address fid -- )
   >r
   s\" \zasm\x01\z\z\z" r@ write-file throw
-  dup program>type 1 r@ write-vec-section
-  dup program>import 2 r@ write-vec-section
-  dup program>func 3 r@ write-vec-section
-  dup program>start 8 r@ write-section
-  program>code 10 r> write-vec-section
+  dup program.type 1 r@ write-vec-section
+  dup program.import 2 r@ write-vec-section
+  dup program.func 3 r@ write-vec-section
+  dup program.start 8 r@ write-section
+  program.code 10 r> write-vec-section
 ;
 
-create compilebuf buf-size allot
+create compilebuf |buf| allot
 compilebuf 256 init-buf
 
 : compile-start ( -- ) compilebuf clear-buf ;
 : compile-stop ( -- c-addr u )
-  compilebuf buf>data @ compilebuf buf>len @
+  compilebuf buf.data @ compilebuf buf.len @
 ;
-: uncompile ( u -- ) negate compilebuf buf>len +! ;
+: uncompile ( u -- ) negate compilebuf buf.len +! ;
 : compile-byte ( c -- ) compilebuf push-byte ;
 : compile-bytes ( c-addr u -- ) compilebuf push-bytes ;
 : compile-uint ( u -- ) uleb128 compile-bytes ;
@@ -194,14 +194,14 @@ a base !
 a base !
 
 : +type ( c-addr u program -- index )
-  program>type >r
+  program.type >r
   parse-signature r@ push-bytes
-  r@ vec>size @ dup 1+ r> vec>size !
+  r@ vec.size @ dup 1+ r> vec.size !
 ;
 
 : +wasi-import ( c-addr u type program -- )
-  program>import >r
-  1 r@ vec>size +!
+  program.import >r
+  1 r@ vec.size +!
   compile-start
   s" wasi_snapshot_preview1" compile-string
   -rot compile-string \ compile the import name
@@ -219,7 +219,7 @@ a base !
 : +start ( index program -- )
   swap
   compile-start compile-uint compile-stop
-  rot program>start push-bytes
+  rot program.start push-bytes
 ;
 
 16 base !
@@ -237,40 +237,40 @@ a base !
 
 : func: ( -- )
   parse-name current-program @ +type
-  1 current-program @ program>func vec>size +!
-  current-program @ program>func push-uint
-  1 current-program @ program>code vec>size +!
+  1 current-program @ program.func vec.size +!
+  current-program @ program.func push-uint
+  1 current-program @ program.code vec.size +!
   compile-start
   0 compile-uint \ no support for locals yet
 ;
 
-create localvec vec-size allot
+create localvec |vec| allot
 localvec 16 init-vec
 : locals ( -- )
   localvec clear-vec
   parse-name \ looks like "ssdsd"
   begin ?dup
   while
-    1 localvec vec>size +!
+    1 localvec vec.size +!
     over c@ >r
     2dup r@ prefix-length
     dup localvec push-uint /string
     r> convert-primitive localvec push-byte
   repeat drop
   1 uncompile \ remove the "0 locals" we started with
-  localvec vec>size @ compile-uint
-  localvec buf>data @ localvec buf>len @ compile-bytes
+  localvec vec.size @ compile-uint
+  localvec buf.data @ localvec buf.len @ compile-bytes
 ;
 
 : func; ( -- )
   end compile-stop
-  current-program @ program>code push-string
+  current-program @ program.code push-string
 ;
 
 : latest-func ( -- u )
   current-program @
-  dup program>import vec>size @
-  swap program>func vec>size @ + 1-
+  dup program.import vec.size @
+  swap program.func vec.size @ + 1-
 ;
 : is-start ( -- )
   latest-func current-program @ +start

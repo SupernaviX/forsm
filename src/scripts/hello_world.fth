@@ -1,6 +1,6 @@
 include src/scripts/assembler.fth
 
-create program program-size allot
+create program |program| allot
 program init-program
 program program!
 
