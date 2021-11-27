@@ -96,6 +96,8 @@ buf-size 1 cells + constant vec-size
   2dup swap vec>size @ uleb128 rot write-file throw
   write-buf
 ;
+
+variable current-program
 4 vec-size * buf-size + constant program-size
 : program>type 0 vec-size * + ;
 : program>import 1 vec-size * + ;
@@ -109,6 +111,7 @@ buf-size 1 cells + constant vec-size
   dup program>code 8 init-vec
   program>start 1 init-buf
 ;
+: program! current-program ! ;
 : free-program ( address -- )
   dup program>type free-vec
   dup program>import free-vec
@@ -197,10 +200,10 @@ a base !
   compile-stop r> push-bytes
 ;
 
-: wasi-import: ( program -- )
-  parse-name rot
-  dup parse-name rot +type
-  swap +wasi-import
+: wasi-import: ( -- )
+  parse-name 
+  parse-name current-program @ +type
+  current-program @ +wasi-import
 ;
 
 : +start ( index program -- )

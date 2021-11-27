@@ -2,9 +2,10 @@ include src/scripts/assembler.fth
 
 create program program-size allot
 program init-program
+program program!
 
 \ imports
-program wasi-import: proc_exit s-
+wasi-import: proc_exit s-
 
 \ function
 1 program program>func vec>size +!
@@ -29,5 +30,5 @@ variable outfile
 s" bin/hello.wasm" w/o create-file throw outfile !
 program outfile @ write-program
 program free-program
-outfile close-file
+outfile @ close-file
 bye
