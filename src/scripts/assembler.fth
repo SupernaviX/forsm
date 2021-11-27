@@ -38,6 +38,9 @@
 : buf.data      0 cells + ;
 : buf.len       1 cells + ;
 : buf.capacity  2 cells + ;
+: buf>contents ( buf -- c-addr u )
+  dup buf.data @ swap buf.len @
+;
 : init-buf ( address capacity -- )
   2dup swap buf.capacity !
   allocate throw over buf.data !
@@ -55,8 +58,8 @@
   dup buf.data @ rot resize throw \ grow the data
   swap buf.data ! \ store the grown data
 ;
-: write-buf ( address fid -- )
-  over buf.data @ rot buf.len @ rot write-file throw
+: write-buf ( buf fid -- )
+  swap buf>contents rot write-file throw
 ;
 
 : push-byte ( c buf -- )
@@ -88,31 +91,33 @@
   over 0 swap vec.size !
   init-buf
 ;
+\ length of the compiled vector in bytes
+: vec>length ( vec -- u )
+  dup vec.size @ uleb128 nip
+  swap buf.len @ +
+;
 : free-vec ( addr -- ) free-buf ;
 : clear-vec ( addr -- )
   0 over vec.size !
   clear-buf
 ;
-\ length of the compiled vector in bytes
-: vec-length ( addr -- u )
-  dup vec.size @ uleb128 nip
-  swap buf.len @ +
-;
-: write-vec ( addr fid -- )
+: write-vec ( vec fid -- )
   2dup swap vec.size @ uleb128 rot write-file throw
   write-buf
 ;
 
 variable current-program
-4 |vec| * |buf| + constant |program|
+5 |vec| * |buf| + constant |program|
 : program.type 0 |vec| * + ;
 : program.import 1 |vec| * + ;
-: program.func 2 |vec| * + ;
-: program.code 3 |vec| * + ;
-: program.start 4 |vec| * + ;
+: program.memory 2 |vec| * + ;
+: program.func 3 |vec| * + ;
+: program.code 4 |vec| * + ;
+: program.start 5 |vec| * + ;
 : init-program ( address -- )
   dup program.type 8 init-vec
   dup program.import 32 init-vec
+  dup program.memory 8 init-vec
   dup program.func 8 init-vec
   dup program.code 8 init-vec
   program.start 1 init-buf
@@ -121,28 +126,36 @@ variable current-program
 : free-program ( address -- )
   dup program.type free-vec
   dup program.import free-vec
+  dup program.memory free-vec
   dup program.func free-vec
   dup program.code free-vec
   program.start free-buf
 ;
-: write-section ( address index fid -- )
-  tuck write-uint
+: write-section ( index addr fid -- )
+  over buf.len @ =0
+    if 2drop drop exit
+    then
+  tuck 2swap write-uint
   over buf.len @ over write-uint
   write-buf
 ;
-: write-vec-section ( address index fid -- )
-  tuck write-uint
-  over vec-length over write-uint
+: write-vec-section ( index addr fid -- )
+  over buf.len @ =0
+    if 2drop drop exit
+    then
+  tuck 2swap write-uint
+  over vec>length over write-uint
   write-vec
 ;
 : write-program ( address fid -- )
   >r
   s\" \zasm\x01\z\z\z" r@ write-file throw
-  dup program.type 1 r@ write-vec-section
-  dup program.import 2 r@ write-vec-section
-  dup program.func 3 r@ write-vec-section
-  dup program.start 8 r@ write-section
-  program.code 10 r> write-vec-section
+  1 over program.type r@ write-vec-section
+  2 over program.import r@ write-vec-section
+  3 over program.func r@ write-vec-section
+  5 over program.memory r@ write-vec-section
+  8 over program.start r@ write-section
+  10 swap program.code r> write-vec-section
 ;
 
 create compilebuf |buf| allot
@@ -178,6 +191,13 @@ a base !
     1 /string
   repeat
   drop
+;
+
+: compile-limits ( min max? -- )
+  ?dup
+    if 1 compile-byte swap compile-uint compile-uint
+    else 0 compile-byte compile-uint
+    then
 ;
 
 16 base !
@@ -216,6 +236,14 @@ a base !
   current-program @ +wasi-import
 ;
 
+: +memory ( min ?max program -- )
+  -rot
+  compile-start compile-limits compile-stop
+  rot program.memory
+  1 over vec.size +!
+  push-bytes
+;
+
 : +start ( index program -- )
   swap
   compile-start compile-uint compile-stop
@@ -223,16 +251,20 @@ a base !
 ;
 
 16 base !
-: end ( -- )          0b compile-byte ;
-: call ( func -- )    10 compile-byte compile-uint ;
-: local.get ( u -- )  20 compile-byte compile-uint ;
-: local.set ( u -- )  21 compile-byte compile-uint ;
-: local.tee ( u -- )  22 compile-byte compile-uint ;
-: i32.const ( n -- )  41 compile-byte compile-sint ;
-: i32.add   ( -- )    6a compile-byte ;
-: i32.sub   ( -- )    6b compile-byte ;
-: i32.mul   ( -- )    6c compile-byte ;
-: i32.div_s ( -- )    6d compile-byte ;
+: end       ( -- )              0b compile-byte ;
+: call      ( func -- )         10 compile-byte compile-uint ;
+: local.get ( u -- )            20 compile-byte compile-uint ;
+: local.set ( u -- )            21 compile-byte compile-uint ;
+: local.tee ( u -- )            22 compile-byte compile-uint ;
+: i32.load  ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
+: i64.load  ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
+: i32.store ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
+: i64.store ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
+: i32.const ( n -- )            41 compile-byte compile-sint ;
+: i32.add   ( -- )              6a compile-byte ;
+: i32.sub   ( -- )              6b compile-byte ;
+: i32.mul   ( -- )              6c compile-byte ;
+: i32.div_s ( -- )              6d compile-byte ;
 a base !
 
 : func: ( -- )
