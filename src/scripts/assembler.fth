@@ -107,17 +107,19 @@
 ;
 
 variable current-program
-5 |vec| * |buf| + constant |program|
+6 |vec| * |buf| + constant |program|
 : program.type 0 |vec| * + ;
 : program.import 1 |vec| * + ;
 : program.memory 2 |vec| * + ;
-: program.func 3 |vec| * + ;
-: program.code 4 |vec| * + ;
-: program.start 5 |vec| * + ;
+: program.global 3 |vec| * + ;
+: program.func 4 |vec| * + ;
+: program.code 5 |vec| * + ;
+: program.start 6 |vec| * + ;
 : init-program ( address -- )
   dup program.type 8 init-vec
   dup program.import 32 init-vec
   dup program.memory 8 init-vec
+  dup program.global 8 init-vec
   dup program.func 8 init-vec
   dup program.code 8 init-vec
   program.start 1 init-buf
@@ -127,6 +129,7 @@ variable current-program
   dup program.type free-vec
   dup program.import free-vec
   dup program.memory free-vec
+  dup program.global free-vec
   dup program.func free-vec
   dup program.code free-vec
   program.start free-buf
@@ -154,6 +157,7 @@ variable current-program
   2 over program.import r@ write-vec-section
   3 over program.func r@ write-vec-section
   5 over program.memory r@ write-vec-section
+  6 over program.global r@ write-vec-section
   8 over program.start r@ write-section
   10 swap program.code r> write-vec-section
 ;
@@ -175,7 +179,7 @@ compilebuf 256 init-buf
   compile-bytes
 ;
 16 base !
-: convert-primitive ( c -- c )
+: encode-primitive ( c -- c )
   case
     [char] c of 7f endof
     [char] d of 7e endof
@@ -187,7 +191,7 @@ a base !
   dup compile-uint
   begin ?dup
   while
-    over c@ convert-primitive compile-byte
+    over c@ encode-primitive compile-byte
     1 /string
   repeat
   drop
@@ -219,8 +223,8 @@ a base !
   r@ vec.size @ dup 1+ r> vec.size !
 ;
 
-: +wasi-import ( c-addr u type program -- )
-  program.import >r
+: +wasi-import ( c-addr u type -- )
+  current-program @ program.import >r
   1 r@ vec.size +!
   compile-start
   s" wasi_snapshot_preview1" compile-string
@@ -233,13 +237,12 @@ a base !
 : wasi-import: ( -- )
   parse-name 
   parse-name current-program @ +type
-  current-program @ +wasi-import
+  +wasi-import
 ;
 
-: +memory ( min ?max program -- )
-  -rot
+: +memory ( min ?max -- )
   compile-start compile-limits compile-stop
-  rot program.memory
+  current-program @ program.memory
   1 over vec.size +!
   push-bytes
 ;
@@ -251,21 +254,39 @@ a base !
 ;
 
 16 base !
-: end       ( -- )              0b compile-byte ;
-: call      ( func -- )         10 compile-byte compile-uint ;
-: local.get ( u -- )            20 compile-byte compile-uint ;
-: local.set ( u -- )            21 compile-byte compile-uint ;
-: local.tee ( u -- )            22 compile-byte compile-uint ;
-: i32.load  ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
-: i64.load  ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
-: i32.store ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
-: i64.store ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
-: i32.const ( n -- )            41 compile-byte compile-sint ;
-: i32.add   ( -- )              6a compile-byte ;
-: i32.sub   ( -- )              6b compile-byte ;
-: i32.mul   ( -- )              6c compile-byte ;
-: i32.div_s ( -- )              6d compile-byte ;
+: end         ( -- )              0b compile-byte ;
+: call        ( func -- )         10 compile-byte compile-uint ;
+: local.get   ( u -- )            20 compile-byte compile-uint ;
+: local.set   ( u -- )            21 compile-byte compile-uint ;
+: local.tee   ( u -- )            22 compile-byte compile-uint ;
+: global.get  ( u -- )            23 compile-byte compile-uint ;
+: global.set  ( u -- )            24 compile-byte compile-uint ;
+: i32.load    ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
+: i64.load    ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
+: i32.store   ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
+: i64.store   ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
+: i32.const   ( n -- )            41 compile-byte compile-sint ;
+: i32.add     ( -- )              6a compile-byte ;
+: i32.sub     ( -- )              6b compile-byte ;
+: i32.mul     ( -- )              6c compile-byte ;
+: i32.div_s   ( -- )              6d compile-byte ;
 a base !
+
+: global: ( -- )
+  compile-start
+  parse-name \ next string is like "c" or "cmut"
+  over c@ encode-primitive compile-byte
+  1 /string s" mut" str= if 1 else 0 then compile-byte
+;
+
+: global; ( -- index )
+  end compile-stop
+  current-program @ program.global
+  dup vec.size @ >r
+  1 over vec.size +!
+  push-bytes
+  r>
+;
 
 : func: ( -- )
   parse-name current-program @ +type
@@ -287,7 +308,7 @@ localvec 16 init-vec
     over c@ >r
     2dup r@ prefix-length
     dup localvec push-uint /string
-    r> convert-primitive localvec push-byte
+    r> encode-primitive localvec push-byte
   repeat drop
   1 uncompile \ remove the "0 locals" we started with
   localvec vec.size @ compile-uint

@@ -8,7 +8,12 @@ program program!
 wasi-import: proc_exit {c-}
 
 \ memory
-1 2 program +memory
+1 2 +memory
+
+\ globals
+global: cmut
+  420 i32.const
+global; constant stack
 
 \ functions
 func: {cc-}
@@ -18,6 +23,8 @@ func: {cc-}
   i32.add
   2 local.set
   16 i32.const
+  2 local.get
+  stack global.set
   2 local.get
   2 0 i32.store
 func;
