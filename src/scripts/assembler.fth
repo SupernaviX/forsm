@@ -74,7 +74,6 @@
 ;
 
 : push-uint ( u buf -- ) swap uleb128 rot push-bytes ;
-: push-sint ( n buf -- ) swap sleb128 rot push-bytes ;
 : push-string ( c-addr u buf )
   tuck over uleb128 rot push-bytes
   swap push-bytes
@@ -147,6 +146,7 @@ compilebuf 256 init-buf
 : compile-byte ( c -- ) compilebuf push-byte ;
 : compile-bytes ( c-addr u -- ) compilebuf push-bytes ;
 : compile-uint ( u -- ) uleb128 compile-bytes ;
+: compile-sint ( n -- ) sleb128 compile-bytes ;
 : compile-string ( c-addr u -- )
   dup compile-uint
   compile-bytes

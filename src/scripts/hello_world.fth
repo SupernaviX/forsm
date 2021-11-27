@@ -7,18 +7,19 @@ program init-program
 program wasi-import: proc_exit s-
 
 \ function
-1 program program>func vec>size !
+1 program program>func vec>size +!
 s" -" program +type program program>func push-uint \ [] -> []
 \ code
+1 program program>code vec>size +!
 16 base !
-1 program program>code vec>size !
-7 program program>code push-uint \ size of function
-0 program program>code push-uint \ no locals
-41 program program>code push-byte \ i32.const
-45 program program>code push-sint \ teehee
-10 program program>code push-byte \ call
-0 program program>code push-uint \ function 0 (the import)
-0b program program>code push-byte \ end
+compile-start
+0 compile-uint \ no locals
+41 compile-byte \ i32.const
+45 compile-sint \ teehee
+10 compile-byte \ call
+0 compile-uint \ function 0 (the import)
+0b compile-byte \ end
+compile-stop program program>code push-string
 a base !
 
 \ start section
