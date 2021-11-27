@@ -18,6 +18,35 @@
   r> drop
 ;
 
+: str= ( c-addr1 u1 c-addr2 u2 -- ? )
+  rot over <>
+    if drop 2drop false exit then
+  begin
+    ?dup =0
+      if 2drop true exit then
+    -rot over c@ over c@ <>
+      if 2drop drop false exit then
+    swap 1+ swap 1+ rot 1-
+  again
+;
+
+variable term
+variable #term
+: search ( c-addr1 u1 c-addr2 u2 -- c-addr3 u3 flag )
+  #term ! term !
+  2dup
+  begin
+    term @ c@ scan
+    dup #term @ <
+      if 2drop false exit
+      then
+    over #term @ term @ over str=
+      if 2swap 2drop true exit
+      then
+    1 /string
+  again
+;
+
 \ return the substring of the input after any leading c ( if any )
 : remove-start ( c-addr1 u1 c -- c-addr2 u2 )
   >r
