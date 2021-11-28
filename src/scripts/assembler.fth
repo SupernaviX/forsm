@@ -34,10 +34,12 @@
   swap uleb128 rot write-file throw
 ;
 
-3 cells constant |buf|
-: buf.data      0 cells + ;
-: buf.len       1 cells + ;
-: buf.capacity  2 cells + ;
+struct
+  cell field buf.data
+  cell field buf.len
+  cell field buf.capacity
+end-struct |buf|
+
 : buf>contents ( buf -- c-addr u )
   dup buf.data @ swap buf.len @
 ;
@@ -85,8 +87,11 @@
   swap push-bytes
 ;
 
-|buf| 1 cells + constant |vec|
-: vec.size    |buf| + ;
+struct
+  |buf| field vec.buf 
+  cell field vec.size
+end-struct |vec|
+
 : init-vec ( address capacity -- )
   over 0 swap vec.size !
   init-buf
@@ -106,15 +111,19 @@
   write-buf
 ;
 
+struct
+  |vec| field program.type
+  |vec| field program.import
+  |vec| field program.memory
+  |vec| field program.global
+  |vec| field program.func
+  |vec| field program.code
+  |buf| field program.start
+end-struct |program|
+
 variable current-program
-6 |vec| * |buf| + constant |program|
-: program.type 0 |vec| * + ;
-: program.import 1 |vec| * + ;
-: program.memory 2 |vec| * + ;
-: program.global 3 |vec| * + ;
-: program.func 4 |vec| * + ;
-: program.code 5 |vec| * + ;
-: program.start 6 |vec| * + ;
+: program! current-program ! ;
+
 : init-program ( address -- )
   dup program.type 8 init-vec
   dup program.import 32 init-vec
@@ -124,7 +133,6 @@ variable current-program
   dup program.code 8 init-vec
   program.start 1 init-buf
 ;
-: program! current-program ! ;
 : free-program ( address -- )
   dup program.type free-vec
   dup program.import free-vec
