@@ -118,11 +118,13 @@ heap-base 4 + heap-end !
 ;
 
 \ Given a free block, make a new used block out of the first u bytes and a new free block out of the rest
-( block-addr u -- )
-: split-existing-block
+: split-existing-block ( block-addr u -- )
   >r
-  dup r@ + over @ r@ - 0 reserve-block \ new block at the end of the old one
-  r> 1 reserve-block   \ shrink the old one
+  dup @ r@ - dup 8 > \ would the new free block be at least enough to hold SOME data?
+    if over r@ + swap 0 reserve-block \ if so, then free it
+    else r> + >r \ otherwise just include it as "bonus memory"
+    then
+  r> 1 reserve-block \ shrink the old block
 ;
 
 ( u -- block-addr failed? )
@@ -190,7 +192,7 @@ heap-base 4 + heap-end !
       4 + -3    \ return a pointer to the OG block, plus an error
     else
       4 +
-      over 4 + over r> cmove \ copy old contents into new pointer
+      over 4 + over r> move \ copy old contents into new pointer
       swap free-block \ free the OG block now that we are done with it
       0     \ return a pointer to the new block, plus no error
     then

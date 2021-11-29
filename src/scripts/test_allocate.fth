@@ -137,4 +137,21 @@ free assert-0
 cr heap-end @ .
 \endtest
 
+\test reallocation of "bonus memory"
+variable blocka
+variable blockb
+variable blockc
+variable blockd
+32 allocate assert-0 blocka !
+16 allocate assert-0 blockb !
+16 allocate assert-0 blockc !
+16 allocate assert-0 blockd !
+\ memory now looks roughly like [aabcd]
+blocka @ free assert-0 \ now like [__bcd]
+blockc @ 32 resize assert-0 blockc ! \ we resized c, now it should look like [ccb_d]
+blockb @ free assert-0 \ b should be freeable without error
+blockc @ free assert-0 \ as should c
+blockd @ free assert-0 \ and d
+\endtest
+
 bye
