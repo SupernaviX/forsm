@@ -7,6 +7,9 @@ program program!
 \ imports
 wasi-import: proc_exit {c-}
 
+\ table
+0 0 +funcref-table
+
 \ memory
 1 2 +memory
 

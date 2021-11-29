@@ -137,9 +137,10 @@ end-struct |vec|
 struct
   |vec| field program.type
   |vec| field program.import
+  |vec| field program.func
+  |vec| field program.table
   |vec| field program.memory
   |vec| field program.global
-  |vec| field program.func
   |vec| field program.code
   cell field program.start
 end-struct |program|
@@ -150,18 +151,20 @@ variable current-program
 : init-program ( address -- )
   dup program.type 8 init-vec
   dup program.import 32 init-vec
+  dup program.func 8 init-vec
+  dup program.table 8 init-vec
   dup program.memory 8 init-vec
   dup program.global 8 init-vec
-  dup program.func 8 init-vec
   -1 over program.start !
   program.code 8 init-vec
 ;
 : free-program ( address -- )
   dup program.type free-vec
   dup program.import free-vec
+  dup program.func free-vec
+  dup program.table free-vec
   dup program.memory free-vec
   dup program.global free-vec
-  dup program.func free-vec
   program.code free-vec
 ;
 : write-start-section ( index addr fid -- )
@@ -186,6 +189,7 @@ variable current-program
   1 over program.type r@ write-vec-section
   2 over program.import r@ write-vec-section
   3 over program.func r@ write-vec-section
+  4 over program.table r@ write-vec-section
   5 over program.memory r@ write-vec-section
   6 over program.global r@ write-vec-section
   8 over program.start @ r@ write-start-section
@@ -282,6 +286,16 @@ a base !
 : +memory ( min ?max -- )
   current-program @ program.memory >r
   compile-start compile-limits compile-stop
+  r@ push-bytes
+  r> vec-add-entry drop
+;
+
+: +funcref-table ( min ?max -- )
+  current-program @ program.table >r
+  compile-start
+    [ base @ 16 base ! ] 70 [ base ! ] compile-byte
+    compile-limits
+  compile-stop
   r@ push-bytes
   r> vec-add-entry drop
 ;
