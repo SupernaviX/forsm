@@ -32,6 +32,10 @@ func: {cc-}
   2 0 i32.store
 func; constant sum
 
+sum export: func summation
+0 export: table __indirect_function_table
+0 export: memory memory
+
 func: {-}
   23 i32.const
   46 i32.const

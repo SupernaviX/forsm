@@ -141,6 +141,7 @@ struct
   |vec| field program.table
   |vec| field program.memory
   |vec| field program.global
+  |vec| field program.export
   |vec| field program.code
   cell field program.start
 end-struct |program|
@@ -155,6 +156,7 @@ variable current-program
   dup program.table 8 init-vec
   dup program.memory 8 init-vec
   dup program.global 8 init-vec
+  dup program.export 8 init-vec
   -1 over program.start !
   program.code 8 init-vec
 ;
@@ -165,6 +167,7 @@ variable current-program
   dup program.table free-vec
   dup program.memory free-vec
   dup program.global free-vec
+  dup program.export free-vec
   program.code free-vec
 ;
 : write-start-section ( index addr fid -- )
@@ -192,6 +195,7 @@ variable current-program
   4 over program.table r@ write-vec-section
   5 over program.memory r@ write-vec-section
   6 over program.global r@ write-vec-section
+  7 over program.export r@ write-vec-section
   8 over program.start @ r@ write-start-section
   10 swap program.code r> write-vec-section
 ;
@@ -268,10 +272,10 @@ a base !
 : +wasi-import ( c-addr u type -- )
   current-program @ program.import >r
   compile-start
-  s" wasi_snapshot_preview1" compile-string
-  -rot compile-string \ compile the import name
-  0 compile-uint      \ type is function
-  compile-uint        \ encode the function signature
+    s" wasi_snapshot_preview1" compile-string
+    -rot compile-string \ compile the import name
+    0 compile-uint      \ type is function
+    compile-uint        \ encode the function signature
   compile-stop
   r@ push-bytes
   r> vec-add-entry drop
@@ -283,13 +287,6 @@ a base !
   +wasi-import
 ;
 
-: +memory ( min ?max -- )
-  current-program @ program.memory >r
-  compile-start compile-limits compile-stop
-  r@ push-bytes
-  r> vec-add-entry drop
-;
-
 : +funcref-table ( min ?max -- )
   current-program @ program.table >r
   compile-start
@@ -298,6 +295,34 @@ a base !
   compile-stop
   r@ push-bytes
   r> vec-add-entry drop
+;
+
+: +memory ( min ?max -- )
+  current-program @ program.memory >r
+  compile-start compile-limits compile-stop
+  r@ push-bytes
+  r> vec-add-entry drop
+;
+
+: +export ( c-addr u index type -- )
+  current-program @ program.export >r
+  compile-start
+    2swap compile-string  \ compile the export name
+    compile-uint          \ encode the type
+    compile-uint          \ encode the index
+  compile-stop
+  r@ push-bytes
+  r> vec-add-entry drop
+;
+
+: export: ( index -- )
+  parse-name
+  2dup s" func" str= if 0 then
+  2dup s" table" str= if 1 then
+  2dup s" memory" str= if 2 then
+  2dup s" global" str= if 3 then
+  -rot 2drop
+  parse-name 2swap +export
 ;
 
 : is-start ( index -- )
