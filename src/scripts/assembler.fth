@@ -141,7 +141,7 @@ struct
   |vec| field program.global
   |vec| field program.func
   |vec| field program.code
-  |buf| field program.start
+  cell field program.start
 end-struct |program|
 
 variable current-program
@@ -153,8 +153,8 @@ variable current-program
   dup program.memory 8 init-vec
   dup program.global 8 init-vec
   dup program.func 8 init-vec
-  dup program.code 8 init-vec
-  program.start 1 init-buf
+  -1 over program.start !
+  program.code 8 init-vec
 ;
 : free-program ( address -- )
   dup program.type free-vec
@@ -162,16 +162,15 @@ variable current-program
   dup program.memory free-vec
   dup program.global free-vec
   dup program.func free-vec
-  dup program.code free-vec
-  program.start free-buf
+  program.code free-vec
 ;
-: write-section ( index addr fid -- )
-  over buf.len @ =0
+: write-start-section ( index addr fid -- )
+  over -1 =
     if 2drop drop exit
     then
   tuck 2swap write-uint
-  over buf.len @ over write-uint
-  write-buf
+  over uleb128 nip over write-uint
+  write-uint
 ;
 : write-vec-section ( index addr fid -- )
   over buf.len @ =0
@@ -189,7 +188,7 @@ variable current-program
   3 over program.func r@ write-vec-section
   5 over program.memory r@ write-vec-section
   6 over program.global r@ write-vec-section
-  8 over program.start r@ write-section
+  8 over program.start @ r@ write-start-section
   10 swap program.code r> write-vec-section
 ;
 
@@ -287,9 +286,8 @@ a base !
   r> vec-add-entry drop
 ;
 
-: +start ( index -- )
-  compile-start compile-uint compile-stop
-  current-program @ program.start push-bytes
+: is-start ( index -- )
+  current-program @ program.start !
 ;
 
 16 base !
@@ -354,19 +352,11 @@ localbuf 16 init-buf
   localbuf buf>contents compile-bytes
 ;
 
-: func; ( -- )
-  current-program @ program.code >r
+: func; ( -- index )
+  current-program @ >r
   end compile-stop
-  dup uleb128 r@ push-bytes
-  r@ push-bytes
-  r> vec-add-entry drop
-;
-
-: latest-func ( -- u )
-  current-program @
-  dup program.import vec>size
-  swap program.func vec>size + 1-
-;
-: is-start ( -- )
-  latest-func +start
+  dup uleb128 r@ program.code push-bytes
+  r@ program.code push-bytes
+  r@ program.code vec-add-entry
+  r> program.import vec>size +
 ;

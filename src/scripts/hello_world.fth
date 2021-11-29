@@ -27,8 +27,7 @@ func: {cc-}
   stack global.set
   2 local.get
   2 0 i32.store
-func;
-latest-func constant sum
+func; constant sum
 
 func: {-}
   23 i32.const
