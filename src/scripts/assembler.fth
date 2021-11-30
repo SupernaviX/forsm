@@ -145,6 +145,16 @@ end-struct |elemsec|
 ;
 
 struct
+  |buf| field datasec.data
+  |buf| field datasec.prefix
+end-struct |datasec|
+
+: init-datasec ( prefix-addr prefix-u addr capacity )
+  over datasec.data swap init-buf
+  datasec.prefix 2dup swap init-buf push-bytes
+;
+
+struct
   |vec| field program.type
   |vec| field program.import
   |vec| field program.func
@@ -154,6 +164,7 @@ struct
   |vec| field program.export
   |vec| field program.elem
   |vec| field program.code
+  |vec| field program.data
   cell field program.start
 end-struct |program|
 
@@ -172,7 +183,8 @@ variable current-elemsec
   dup program.export 8 init-vec
   dup program.elem 8 init-vec
   -1 over program.start !
-  program.code 8 init-vec
+  dup program.code 8 init-vec
+  program.data 8 init-vec
 ;
 : free-program ( address -- )
   dup program.type free-vec
@@ -183,7 +195,17 @@ variable current-elemsec
   dup program.global free-vec
   dup program.export free-vec
   dup program.elem free-vec
-  program.code free-vec
+  dup program.code free-vec
+  program.data free-vec
+;
+
+: write-vec-section ( index addr fid -- )
+  over buf.len @ =0
+    if 2drop drop exit
+    then
+  tuck 2swap write-uint
+  over vec>length over write-uint
+  write-vec
 ;
 : write-start-section ( index addr fid -- )
   over -1 =
@@ -195,7 +217,7 @@ variable current-elemsec
 ;
 : elem-section-size ( addr -- u )
 \ start with the length of the vector's uleb128-encoded size
-  dup elemsec.elems vec>size uleb128 nip swap \ start with size of the 
+  dup vec>size uleb128 nip swap
   buf>contents 0 ?do ( u buf )
     dup elemsec.prefix buf.len @ \ add the length of each elemsec's prefix
     over elemsec.elems vec>length + \ and the length of the elemsec itself
@@ -217,13 +239,30 @@ variable current-elemsec
   |elemsec| +loop
   2drop
 ;
-: write-vec-section ( index addr fid -- )
+: data-section-size ( addr -- u )
+  dup vec>size uleb128 nip swap
+  buf>contents 0 ?do ( u buf )
+    dup datasec.prefix buf.len @ \ add the length of each datasec's prefix
+    over datasec.data buf.len @ uleb128 nip + \ and hte length of the data's size
+    over datasec.data buf.len @ + \ and the length of the data itself
+    rot + swap |datasec| +
+  |datasec| +loop
+  drop
+;
+: write-data-section ( index addr fid -- )
   over buf.len @ =0
     if 2drop drop exit
     then
   tuck 2swap write-uint
-  over vec>length over write-uint
-  write-vec
+  over data-section-size over write-uint
+  over vec>size over write-uint
+  swap buf>contents 0 ?do ( fid buf )
+    2dup datasec.prefix swap write-buf
+    2dup datasec.data buf.len @ swap write-uint
+    2dup datasec.data swap write-buf
+    |datasec| +
+  |datasec| +loop
+  2drop
 ;
 : write-program ( address fid -- )
   >r
@@ -237,7 +276,8 @@ variable current-elemsec
   7 over program.export r@ write-vec-section
   8 over program.start @ r@ write-start-section
   9 over program.elem r@ write-elem-section
-  10 swap program.code r> write-vec-section
+  10 over program.code r@ write-vec-section
+  11 swap program.data r> write-data-section
 ;
 
 create compilebuf |buf| allot
@@ -410,13 +450,28 @@ a base !
   |elemsec| r@ reserve-space 8 init-elemsec
   r> vec-add-entry
 ;
+
+: datasec: ( memory -- )
+  compile-start
+  compile-uint
+;
+: datasec; ( -- index )
+  current-program @ program.data >r
+  end compile-stop
+  |datasec| r@ reserve-space 8 init-datasec
+  r> vec-add-entry
+;
+: databuf[] ( index -- )
+  current-program @ program.data buf.data @ \ get to the buffer of data buffers
+  swap |datasec| * + datasec.data \ and return the right one
+;
+
 : global: ( -- )
   compile-start
   parse-name \ next string is like "c" or "cmut"
   over c@ encode-primitive compile-byte
   1 /string s" mut" str= if 1 else 0 then compile-byte
 ;
-
 : global; ( -- index )
   current-program @ program.global >r
   end compile-stop

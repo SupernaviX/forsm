@@ -13,6 +13,10 @@ wasi-import: proc_exit {c-}
 \ memory
 1 2 +memory
 
+0 datasec: 0 i32.const datasec;
+: mydata literal databuf[] ;
+s" pingas" mydata push-bytes
+
 \ globals
 global: cmut
   420 i32.const
