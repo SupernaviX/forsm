@@ -7,6 +7,9 @@ program program!
 wasi-import: proc_exit {c-}
 
 1 0 +memory
+3 0 +funcref-table \ TODO: this needs to be as big as all the elem sections
+0 elemsec: 0 i32.const elemsec; elemsec!
+
 
 global: cmut 256 i32.const global; constant stack
 : stack@ ( -- ) stack global.get ;
@@ -31,30 +34,34 @@ func: {-} locals c
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
-func; constant 'dup
+func; +elem constant 'dup
 
 func: {-}
   'pop call
   'pop call
   i32.add
   'push call
-func; constant '+
+func; +elem constant '+
 
 func: {-}
   'pop call
   'pop call
   i32.mul
   'push call
-func; constant '*
+func; +elem constant '*
 
+: execute-callable [ type: {-} ] literal call_indirect ;
 func: {-}
   8 i32.const
   'push call
-  'dup call
-  '* call
+  'dup i32.const
+  execute-callable
+  '* i32.const
+  execute-callable
   5 i32.const
   'push call
-  '+ call
+  '+ i32.const
+  execute-callable
   'pop call
   0 call
 func; is-start

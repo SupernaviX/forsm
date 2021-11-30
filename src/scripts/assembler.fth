@@ -135,6 +135,16 @@ end-struct |vec|
 ;
 
 struct
+  |vec| field elemsec.elems
+  |buf| field elemsec.prefix
+end-struct |elemsec|
+
+: init-elemsec ( prefix-addr prefix-u addr capacity -- )
+  over elemsec.elems swap init-vec
+  elemsec.prefix 2dup swap init-buf push-bytes
+;
+
+struct
   |vec| field program.type
   |vec| field program.import
   |vec| field program.func
@@ -142,12 +152,15 @@ struct
   |vec| field program.memory
   |vec| field program.global
   |vec| field program.export
+  |vec| field program.elem
   |vec| field program.code
   cell field program.start
 end-struct |program|
 
 variable current-program
 : program! current-program ! ;
+variable current-elemsec
+: elemsec! current-elemsec ! ;
 
 : init-program ( address -- )
   dup program.type 8 init-vec
@@ -157,6 +170,7 @@ variable current-program
   dup program.memory 8 init-vec
   dup program.global 8 init-vec
   dup program.export 8 init-vec
+  dup program.elem 8 init-vec
   -1 over program.start !
   program.code 8 init-vec
 ;
@@ -168,6 +182,7 @@ variable current-program
   dup program.memory free-vec
   dup program.global free-vec
   dup program.export free-vec
+  dup program.elem free-vec
   program.code free-vec
 ;
 : write-start-section ( index addr fid -- )
@@ -177,6 +192,30 @@ variable current-program
   tuck 2swap write-uint
   over uleb128 nip over write-uint
   write-uint
+;
+: elem-section-size ( addr -- u )
+\ start with the length of the vector's uleb128-encoded size
+  dup elemsec.elems vec>size uleb128 nip swap \ start with size of the 
+  buf>contents 0 ?do ( u buf )
+    dup elemsec.prefix buf.len @ \ add the length of each elemsec's prefix
+    over elemsec.elems vec>length + \ and the length of the elemsec itself
+    rot + swap |elemsec| +
+  |elemsec| +loop
+  drop
+;
+: write-elem-section ( index addr fid -- )
+  over buf.len @ =0
+    if 2drop drop exit
+    then
+  tuck 2swap write-uint
+  over elem-section-size over write-uint
+  over vec>size over write-uint
+  swap buf>contents 0 ?do ( fid buf )
+    2dup elemsec.prefix swap write-buf \ write the tableindex + offset
+    2dup elemsec.elems swap write-vec \ write the contents
+    |elemsec| +
+  |elemsec| +loop
+  2drop
 ;
 : write-vec-section ( index addr fid -- )
   over buf.len @ =0
@@ -197,6 +236,7 @@ variable current-program
   6 over program.global r@ write-vec-section
   7 over program.export r@ write-vec-section
   8 over program.start @ r@ write-start-section
+  9 over program.elem r@ write-elem-section
   10 swap program.code r> write-vec-section
 ;
 
@@ -269,6 +309,10 @@ a base !
     then
 ;
 
+: type: ( -- index )
+  parse-name +type
+;
+
 : +wasi-import ( c-addr u type -- )
   current-program @ program.import >r
   compile-start
@@ -325,29 +369,47 @@ a base !
   parse-name 2swap +export
 ;
 
+: +elem ( func -- index )
+  current-program @ program.elem buf.data @ current-elemsec @ |elemsec| * + >r
+  compile-start compile-uint compile-stop
+  r@ push-bytes
+  r> vec-add-entry
+;
+
 : is-start ( index -- )
   current-program @ program.start !
 ;
 
 16 base !
-: end         ( -- )              0b compile-byte ;
-: call        ( func -- )         10 compile-byte compile-uint ;
-: local.get   ( u -- )            20 compile-byte compile-uint ;
-: local.set   ( u -- )            21 compile-byte compile-uint ;
-: local.tee   ( u -- )            22 compile-byte compile-uint ;
-: global.get  ( u -- )            23 compile-byte compile-uint ;
-: global.set  ( u -- )            24 compile-byte compile-uint ;
-: i32.load    ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
-: i64.load    ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
-: i32.store   ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
-: i64.store   ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
-: i32.const   ( n -- )            41 compile-byte compile-sint ;
-: i32.add     ( -- )              6a compile-byte ;
-: i32.sub     ( -- )              6b compile-byte ;
-: i32.mul     ( -- )              6c compile-byte ;
-: i32.div_s   ( -- )              6d compile-byte ;
+: end           ( -- )              0b compile-byte ;
+: call          ( func -- )         10 compile-byte compile-uint ;
+: call_indirect ( type -- )         11 compile-byte compile-uint 0 compile-byte ;
+: local.get     ( u -- )            20 compile-byte compile-uint ;
+: local.set     ( u -- )            21 compile-byte compile-uint ;
+: local.tee     ( u -- )            22 compile-byte compile-uint ;
+: global.get    ( u -- )            23 compile-byte compile-uint ;
+: global.set    ( u -- )            24 compile-byte compile-uint ;
+: i32.load      ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
+: i64.load      ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
+: i32.store     ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
+: i64.store     ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
+: i32.const     ( n -- )            41 compile-byte compile-sint ;
+: i32.add       ( -- )              6a compile-byte ;
+: i32.sub       ( -- )              6b compile-byte ;
+: i32.mul       ( -- )              6c compile-byte ;
+: i32.div_s     ( -- )              6d compile-byte ;
 a base !
 
+: elemsec: ( table -- )
+  compile-start
+  compile-uint
+;
+: elemsec; ( -- index )
+  current-program @ program.elem >r
+  end compile-stop
+  |elemsec| r@ reserve-space 8 init-elemsec
+  r> vec-add-entry
+;
 : global: ( -- )
   compile-start
   parse-name \ next string is like "c" or "cmut"
