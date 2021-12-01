@@ -353,6 +353,14 @@ a base !
   parse-name +type
 ;
 
+: blocktype: ( -- index )
+  char
+  dup [char] 0 =
+    if [ base @ 16 base ! ] 40 [ base ! ]
+    else encode-primitive
+    then
+;
+
 : +wasi-import ( c-addr u type -- )
   current-program @ program.import >r
   compile-start
@@ -421,7 +429,9 @@ a base !
 ;
 
 16 base !
+: loop_         ( blocktype -- )    03 compile-byte compile-byte ;
 : end           ( -- )              0b compile-byte ;
+: br            ( label -- )        0c compile-byte compile-uint ;
 : call          ( func -- )         10 compile-byte compile-uint ;
 : call_indirect ( type -- )         11 compile-byte compile-uint 0 compile-byte ;
 : local.get     ( u -- )            20 compile-byte compile-uint ;

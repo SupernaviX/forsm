@@ -7,9 +7,12 @@ program program!
 wasi-import: proc_exit {c-}
 
 1 0 +memory
-3 0 +funcref-table \ TODO: this needs to be as big as all the elem sections
+5 0 +funcref-table \ TODO: this needs to be as big as all the elem sections
 0 elemsec: 0 i32.const elemsec; elemsec!
 
+0 datasec: 256 i32.const datasec;
+: stackdata literal databuf[] ;
+: v, stackdata push-cell ;
 
 global: cmut 256 i32.const global; constant stack
 : stack@ ( -- ) stack global.get ;
@@ -30,41 +33,54 @@ func: {-c} locals c
   0 local.get 4 add stack! \ update the stack pointer
 func; constant 'pop
 
+global: cmut 256 i32.const global; constant ip
+: ip@ ( -- ) ip global.get ;
+: ip! ( -- ) ip global.set ;
+: next ( -- ) ip@ 4 add ip! ;
+
+func: {-} locals c
+  ip@ 0 local.tee
+  4 cell.load 'push call
+  0 local.get 8 add ip!
+func; +elem constant 'lit
+
+func: {-} locals c
+  'pop call 0 call \ exit with some status code
+next func; +elem constant 'abort
+
 func: {-} locals c
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
-func; +elem constant 'dup
+next func; +elem constant 'dup
 
 func: {-}
-  'pop call
-  'pop call
+  'pop call 'pop call
   i32.add
   'push call
-func; +elem constant '+
+next func; +elem constant '+
 
 func: {-}
-  'pop call
-  'pop call
+  'pop call 'pop call
   i32.mul
   'push call
-func; +elem constant '*
+next func; +elem constant '*
 
-: execute-callable [ type: {-} ] literal call_indirect ;
-func: {-}
-  8 i32.const
-  'push call
-  'dup i32.const
-  execute-callable
-  '* i32.const
-  execute-callable
-  5 i32.const
-  'push call
-  '+ i32.const
-  execute-callable
-  'pop call
-  0 call
+type: [-} constant callable-type
+
+func: {-} \ inner interpreter
+  blocktype: 0 loop_
+    ip@ 0 cell.load callable-type call_indirect
+    0 br
+  end
 func; is-start
+
+'lit v, 8 v,
+'dup v,
+'* v,
+'lit v, 5 v,
+'+ v,
+'abort v,
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !
