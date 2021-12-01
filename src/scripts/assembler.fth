@@ -430,6 +430,8 @@ a base !
 
 16 base !
 : loop_         ( blocktype -- )    03 compile-byte compile-byte ;
+: if_           ( blocktype -- )    04 compile-byte compile-byte ;
+: else_         ( -- )              05 compile-byte ;
 : end           ( -- )              0b compile-byte ;
 : br            ( label -- )        0c compile-byte compile-uint ;
 : call          ( func -- )         10 compile-byte compile-uint ;
@@ -444,6 +446,8 @@ a base !
 : i32.store     ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
 : i64.store     ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
 : i32.const     ( n -- )            41 compile-byte compile-sint ;
+: i32.eqz       ( -- )              45 compile-byte ;
+: i32.lt_s      ( -- )              48 compile-byte ;
 : i32.add       ( -- )              6a compile-byte ;
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;

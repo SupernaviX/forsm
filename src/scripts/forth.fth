@@ -96,6 +96,20 @@ func: {c-}
   0 local.get 8 add ip!
 func; make-native constant 'lit
 
+\ branches!
+func: {c-}
+  ip@ 4 cell.load ip!
+func; make-native constant 'branch
+
+\ conditional branches!
+func: {c-}
+  (pop) call i32.eqz
+    blocktype: c if_ ip@ 4 cell.load
+    else_ ip@ 8 add
+    end
+  ip!
+func; make-native constant '?branch
+
 \ exit with some status code
 \ for now, the exit code is the only functioning output
 func: {c-}
@@ -130,18 +144,24 @@ func: {-} \ inner interpreter
 func; is-start
 
 \ handwritten colon definitions currently look like this
-dict-here constant 'square
-(docol) dict,
-'dup dict,
-'* dict,
+dict-here constant 'square (docol) dict,
+  'dup dict,
+  '* dict,
 'exit dict,
 
-dict-here constant 'main
-(docol) dict,
-'lit dict, 8 dict,
-'square dict,
-'lit dict, 5 dict,
-'+ dict,
+dict-here constant 'condtest (docol) dict,
+  dict-here '?branch dict, 24 + dict,
+    'lit dict, 5 dict,
+  dict-here 'branch dict, 16 + dict,
+    'lit dict, 6 dict,
+'exit dict,
+
+dict-here constant 'main (docol) dict,
+  'lit dict, 8 dict,
+  'square dict,
+  'lit dict, -1 dict,
+  'condtest dict,
+  '+ dict,
 'exit dict,
 
 'main exec,
