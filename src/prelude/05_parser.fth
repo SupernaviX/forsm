@@ -110,6 +110,10 @@ source-buffer0 'source-buffer !
   bl parse
 ;
 
+: s>number? ( c-addr u -- d ? )
+  ?number if -1 else 0 0 then
+;
+
 \ Now we have a parse-name which reads from the proper source at all times.
 
 \ Define some nice-to-have utilities 
