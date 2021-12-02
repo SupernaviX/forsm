@@ -1,4 +1,4 @@
-include src/scripts/assembler.fth
+include ./assembler.fth
 
 create program |program| allot
 program init-program
@@ -172,4 +172,5 @@ s" bin/forth.wasm" w/o create-file throw outfile !
 program outfile @ write-program
 program free-program
 outfile @ close-file
+." File generated! " cr
 bye

@@ -57,15 +57,6 @@ source-buffer0 'source-buffer !
   r> source.name !
 ;
 
-: current-file ( -- c-addr u )
-  @source
-  begin dup source0 <>
-  while dup source.name# @ =0
-  while |source| +
-  repeat then
-  dup source.name @ swap source.name# @
-;
-
 : drop-source ( -- )
   @source
   dup source.id @ close-file throw
@@ -184,3 +175,53 @@ source-buffer0 'source-buffer !
   nip r> tuck - ( c-addr u )
   compiling? if postpone sliteral then \ compile into a def if we're compiling
 ; immediate
+
+\ Now that we have a source, we have a concept of a "current directory"
+: current-file ( -- c-addr u )
+  @source
+  begin dup source0 <>
+  while dup source.name# @ =0
+  while |source| +
+  repeat then
+  dup source.name @ swap source.name# @
+;
+
+: current-directory ( -- c-addr u )
+  current-file
+  \ remove the last directory separator
+  begin dup
+  while 2dup + 1- c@ [char] / <> 
+  while 1-
+  repeat then
+;
+
+\ Add support for resolving relative paths.
+
+: relative? ( c-addr u -- ? )
+  if c@ [char] . =
+  else drop false
+  then
+;
+
+create pathbuf 80 allot
+variable pathbuf#
+0 pathbuf# !
+
+: push-path-segment ( c-addr u -- )
+  pathbuf pathbuf# @ + swap
+  dup pathbuf# +!
+  move
+;
+
+: resolve-relative-path ( c-addr u -- c-addr u )
+  2dup relative? =0 if exit then
+  0 pathbuf# !
+  current-directory push-path-segment
+  2 /string push-path-segment
+  pathbuf pathbuf# @
+;
+
+\ update the file builtins to respect relative paths
+: create-file >r resolve-relative-path r> create-file ;
+: open-file >r resolve-relative-path r> open-file ;
+

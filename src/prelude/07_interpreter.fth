@@ -50,6 +50,7 @@
 ;
 
 : included ( c-addr u -- )
+  resolve-relative-path \ make sure the path we save is absolute
   2dup save-filename 2swap
   r/o open-file throw
   include-named-file
