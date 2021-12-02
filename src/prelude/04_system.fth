@@ -215,7 +215,10 @@ variable >fd
   rot drop -rot - ( last-char u )
   swap is-term? over <>0 or ( u more? )
   \ discard newlines
-  begin r@ filebuf-peek is-term?
+  begin
+    r@ filebuf-refill?
+    ?dup if r> drop exit then \ rethrow error
+    r@ filebuf-peek is-term?
   while r@ filebuf-consume
   repeat
   r> drop 0
