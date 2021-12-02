@@ -27,7 +27,7 @@
   again
 ;
 
-: include-file ( fid -- )
+: include-named-file ( name name# fid -- )
   add-file-source
   begin refill
   while
@@ -38,9 +38,21 @@
   drop-source
 ;
 
+: include-file ( fid -- )
+  0 0 rot include-named-file
+;
+
+: save-filename ( c-addr u -- c-addr u )
+  tuck here >r
+  dup allot align
+  r@ swap move
+  r> swap
+;
+
 : included ( c-addr u -- )
+  2dup save-filename 2swap
   r/o open-file throw
-  include-file
+  include-named-file
 ;
 
 : include ( -- ) parse-name included ;

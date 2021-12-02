@@ -1,11 +1,13 @@
 \ >IN is the offset in SOURCE that we've currently parsed to
 variable >in host-deferred
 
-4 cells constant |source|
+6 cells constant |source|
 : source.buf    0 cells + ;
 : source.len    1 cells + ;
 : source.id     2 cells + ;
 : source.in     3 cells + ;
+: source.name   4 cells + ;
+: source.name#  5 cells + ;
 
 \ build a stack of source records
 create source-records |source| 9 * allot
@@ -19,6 +21,8 @@ tib @ source0 source.buf !
 #tib @ source0 source.len !
 0 source0 source.id !
 0 source0 source.in !
+0 source0 source.name !
+0 source0 source.name !
 
 \ redefine tib and #tib to use this source record as source-of-truth
 source0 source.buf constant tib
@@ -39,15 +43,27 @@ source-buffer0 'source-buffer !
   |source.buf| 'source-buffer +!
 ;
 
-: add-file-source ( fid -- )
+: add-file-source ( name name# fid -- )
   @source
   >in @ over source.in !
   |source| -
   dup 'source !
-  take-source-buffer over source.buf !
-  0 over source.len !
-  0 over source.in !
-  source.id !
+  >r
+  take-source-buffer r@ source.buf !
+  0 r@ source.len !
+  0 r@ source.in !
+  r@ source.id !
+  r@ source.name# !
+  r> source.name !
+;
+
+: current-file ( -- c-addr u )
+  @source
+  begin dup source0 <>
+  while dup source.name# @ =0
+  while |source| +
+  repeat then
+  dup source.name @ swap source.name# @
 ;
 
 : drop-source ( -- )
