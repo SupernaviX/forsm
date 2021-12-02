@@ -76,6 +76,22 @@ fn build_io(compiler: &mut Compiler) {
         vec![I32],
         vec![I32],
     );
+    // get stats of a given preopened directory ( fid >stat -- err )
+    compiler.define_imported_word(
+        "FD-PRESTAT-GET",
+        "wasi_snapshot_preview1",
+        "fd_prestat_get",
+        vec![I32, I32],
+        vec![I32],
+    );
+    // get the name of a given preopened directory ( fid >name size -- err )
+    compiler.define_imported_word(
+        "FD-PRESTAT-DIR-NAME",
+        "wasi_snapshot_preview1",
+        "fd_prestat_dir_name",
+        vec![I32, I32, I32],
+        vec![I32],
+    );
 
     compiler.define_constant_word("INBUF", 0x100);
     compiler.define_variable_word(">INBUF", 0);

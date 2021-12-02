@@ -110,10 +110,64 @@ create iovec 2 cells allot
 fd-allow-read constant r/o
 fd-allow-write constant w/o
 
+46 constant relative-path-char
+47 constant separator-char
+
+create namelengthbuf 2 cells allot
+: namelength ( -- u ) namelengthbuf cell + @ ;
+\ is this path a child of the parent?
+: is-parent-directory? ( path-addr path-u dir-addr dir-u -- ? )
+  rot over <= \ if the path length is <= the path length, it can't be a parent
+    if 2drop 2drop false exit
+    then
+  begin ?dup
+  while
+    -rot
+    over c@ over c@ <>
+      if drop 2drop false exit
+      then
+    1+ -rot 1+ -rot 1-
+  repeat
+  2drop true
+;
+
+: normalize-directory-name ( c-addr u -- c-addr u )
+  relative-path-char remove-start
+  separator-char remove-start
+  1- \ remove null terminator
+;
+
+variable parent-fd
+variable parent-namelength
+: get-preopened-relative-path ( c-addr u -- fid c-addr u )
+  3 \ this is the first preopened descriptor
+  begin
+    dup namelengthbuf fd-prestat-get =0
+  while
+    >r
+    namelength allocate throw \ reserve space to hold the name
+    r@ over namelength fd-prestat-dir-name throw
+    >r 2dup r@ namelength normalize-directory-name is-parent-directory? \ validate whether this is a parent
+    r> free throw \ free the name buffer either way
+    if
+      r@ parent-fd !  \ track that this is a valid parent
+      namelength 1- parent-namelength !
+    then
+    r> 1+ \ try the next
+  repeat drop
+  parent-namelength @ dup 1 >
+    if /string \ remove the parent from the string
+    else drop
+    then
+  separator-char remove-start \ and any leading directory separators
+  parent-fd @ -rot \ and return the parent fd AND the pathname
+;
+
 variable >fd
 : open-fd-by-path ( c-addr u options -- fid err )
   >r \ hold onto options for l8r
-  init-dir-fd 0 2swap ( fid dirflags path-addr path-u )
+  get-preopened-relative-path ( fid path-addr path-u )
+  0 -rot ( fid dirflags path-addr path-u )
   r@ fd-oflags r> fd-rights 0 0 0 ( ... oflags drights-base drights-inheriting fdflags )
   >fd path-open
   >fd @ swap ( fid err )
