@@ -326,7 +326,7 @@ a base !
 \ accepts signatures like "{cc-d}"
 : parse-signature ( c-addr u -- c-addr u )
   swap 1+ swap 2 - \ trim the curlies off 
-  [char] - split 2swap
+  [char] - split
   compile-start
   60 compile-byte
   compile-primitives

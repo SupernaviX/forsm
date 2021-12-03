@@ -190,13 +190,16 @@ source-buffer0 'source-buffer !
   dup source.name @ swap source.name# @
 ;
 
-: current-directory ( -- c-addr u )
-  current-file
-  \ remove the last directory separator
+\ "foo/bar/baz" -> "foo/bar/"
+: directory-of ( c-addr u -- c-addr u )
   begin dup
-  while 2dup + 1- c@ [char] / <> 
+  while 2dup + 1- c@ separator-char <>
   while 1-
   repeat then
+;
+
+: current-directory ( -- c-addr u )
+  current-file directory-of
 ;
 
 \ Add support for resolving relative paths.
@@ -216,12 +219,48 @@ variable pathbuf#
   dup pathbuf# +!
   move
 ;
+: drop-path-segment ( -- )
+  pathbuf pathbuf# @ \ start with the current path so far
+  dup =0
+    if 814 throw \ can't traverse above the root
+    else 1- \ drop the trailing separator
+    then
+  directory-of
+  nip pathbuf# !
+;
+: push-separator-if-needed ( -- )
+  \ if the path is empty, we're at the top level
+  \ don't bother adding a separator there
+  pathbuf# @ ?dup =0 if exit then
+  pathbuf + 1-
+  dup c@ separator-char =
+    if drop \ if it ends in a separator, do nothing
+    else
+      separator-char swap 1+ c!
+      1 pathbuf# +!
+    then
+;
+
+: next-segment ( c-addr u -- segment-addr segment-u rest-addr rest-u )
+  separator-char split 
+;
 
 : resolve-relative-path ( c-addr u -- c-addr u )
   2dup relative? =0 if exit then
   0 pathbuf# !
   current-directory push-path-segment
-  2 /string push-path-segment
+  begin next-segment dup
+  while
+    push-separator-if-needed
+    2dup s" ." str=
+      if 2drop \ do nothing for current dir
+      else 2dup s" .." str=
+        if 2drop drop-path-segment
+        else push-path-segment
+        then
+      then
+  repeat
+  2drop 2drop
   pathbuf pathbuf# @
 ;
 

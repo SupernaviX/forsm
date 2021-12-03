@@ -30,10 +30,11 @@
   again
 ;
 
-: split ( c-addr1 u1 c -- c-addr2 u2 c-addr3 u3 )
+\ given a string, return the parts of it before and after the first instance of a char
+: split ( c-addr u c -- after-addr after-u before-addr before-u )
   >r 2dup r> scan
-  dup >r 2swap r> -
-  2swap 1 /string
+  dup >r dup 1 min /string
+  2swap r> -
 ;
 
 variable term
