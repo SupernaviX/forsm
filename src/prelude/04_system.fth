@@ -1,11 +1,12 @@
 1024 constant |filebuf.data|
-5 cells |filebuf.data| + constant |filebuf|
+6 cells |filebuf.data| + constant |filebuf|
 : filebuf.fid   0 cells + ;
 : filebuf.prev  1 cells + ;
 : filebuf.next  2 cells + ;
-: filebuf.head  3 cells + ;
-: filebuf.len   4 cells + ;
-: filebuf.data  5 cells + ;
+: filebuf.file? 3 cells + ;
+: filebuf.head  4 cells + ;
+: filebuf.len   5 cells + ;
+: filebuf.data  6 cells + ;
 
 \ create a "dummy" filebuf on the stack
 create filebufs 3 cells allot \ only include header fields
@@ -13,7 +14,8 @@ create filebufs 3 cells allot \ only include header fields
 filebufs filebufs filebuf.prev !
 filebufs filebufs filebuf.next !
 
-: filebuf-new ( fid addr -- )
+: filebuf-new ( fid file? addr -- )
+  tuck filebuf.file? !
   tuck filebuf.fid !
   dup filebuf.data over filebuf.head !
   0 over filebuf.len !
@@ -23,12 +25,12 @@ filebufs filebufs filebuf.next !
   dup filebufs filebuf.prev !
   dup filebuf.prev @ filebuf.next !
 ;
-: filebuf-allot ( fid -- )
+: filebuf-allot ( fid file? -- )
   here
   |filebuf| allot
   filebuf-new
 ;
-: filebuf-allocate ( fid -- err )
+: filebuf-allocate ( fid file? -- err )
   |filebuf| allocate ?dup
     if nip nip
     else filebuf-new 0
@@ -36,7 +38,7 @@ filebufs filebufs filebuf.next !
 ;
 
 \ file 0 (stdin) is already open, so add a buffer for it
-0 filebuf-allot
+0 0 filebuf-allot
 
 : filebuf-delete ( filebuf -- err )
   \ link this filebuf's prev and next to each other
@@ -173,12 +175,24 @@ variable >fd
   >fd @ swap ( fid err )
 ;
 
+\ double-aligned buffer to hold an fdstat
+dalign here 8 cells allot constant >fdstat
+
+: is-fd-file? ( fid -- ? err )
+  >fdstat fd-fdstat-get
+  ?dup if 0 swap exit then \ rethrow error
+  >fdstat c@ 4 = 0 \ this is the offset of filetype, and the value of "normal file"
+;
+
 : open-file ( c-addr u fam -- fid err )
   dup >r
   open-fd-by-path
   ?dup if r> drop exit then \ rethrow error
   r> fd-allow-read and
-    if dup filebuf-allocate
+    if
+      dup is-fd-file?
+      ?dup if r> drop nip exit then
+      over swap filebuf-allocate
     else 0
     then
 ;
@@ -214,9 +228,12 @@ variable >fd
   repeat ( u1 c-addr u2 last-char )
   rot drop -rot - ( last-char u )
   swap is-term? over <>0 or ( u more? )
-  \ discard newlines
+  \ Discard newlines.
   begin
-    r@ filebuf-refill?
+    r@ filebuf.file? @ \ only try refilling if we're reading from a file
+      if r@ filebuf-refill?
+      else 0
+      then
     ?dup if r> drop exit then \ rethrow error
     r@ filebuf-peek is-term?
   while r@ filebuf-consume

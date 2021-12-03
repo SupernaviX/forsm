@@ -92,6 +92,14 @@ fn build_io(compiler: &mut Compiler) {
         vec![I32, I32, I32],
         vec![I32],
     );
+    // get information about an open file descriptor ( fid >fdstat -- err )
+    compiler.define_imported_word(
+        "FD-FDSTAT-GET",
+        "wasi_snapshot_preview1",
+        "fd_fdstat_get",
+        vec![I32, I32],
+        vec![I32],
+    );
 
     compiler.define_constant_word("INBUF", 0x100);
     compiler.define_variable_word(">INBUF", 0);
