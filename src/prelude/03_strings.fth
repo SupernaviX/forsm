@@ -1,7 +1,5 @@
 32 constant bl
 
-: is-term? ( c -- ? ) dup 10 = swap 13 = or ;
-
 \ "adjust" the head of a string. Like a more dangerous substring
 : /string ( c-addr1 u1 n -- c-addr2 u2 )
   tuck - -rot + swap

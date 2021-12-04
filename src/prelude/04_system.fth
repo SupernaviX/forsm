@@ -83,6 +83,34 @@ create iovec 2 cells allot
   -1 swap filebuf.len +!
 ;
 
+: filebuf-refill-if-file ( filebuf -- err )
+  dup filebuf.file? @
+    if filebuf-refill?
+    else drop 0
+    then
+;
+
+: is-cr? ( c -- ) 13 = ;
+: is-lf? ( c -- ) 10 = ;
+: is-term? ( c -- ? ) dup is-cr? swap is-lf? or ;
+
+: filebuf-consume-term ( filebuf -- err )
+  >r
+  r@ filebuf-refill-if-file
+  ?dup if r> drop exit then
+  r@ filebuf-peek
+  dup is-term? if r@ filebuf-consume then
+  is-lf? if r> drop 0 exit then
+  \ if we saw an \r, try consuming one more \n
+  r@ filebuf-refill-if-file
+  ?dup if r> drop exit then
+  r@ filebuf-peek is-lf?
+    if r> filebuf-consume 0
+    else r> drop 0
+    then
+;
+
+
 4 constant init-dir-fd
 
 \ options bitmask
@@ -228,17 +256,8 @@ dalign here 8 cells allot constant >fdstat
   repeat ( u1 c-addr u2 last-char )
   rot drop -rot - ( last-char u )
   swap is-term? over <>0 or ( u more? )
-  \ Discard newlines.
-  begin
-    r@ filebuf.file? @ \ only try refilling if we're reading from a file
-      if r@ filebuf-refill?
-      else 0
-      then
-    ?dup if r> drop exit then \ rethrow error
-    r@ filebuf-peek is-term?
-  while r@ filebuf-consume
-  repeat
-  r> drop 0
+  \ consume one set of trailing terminators
+  r> filebuf-consume-term
 ;
 
 create ciovec 2 cells allot
