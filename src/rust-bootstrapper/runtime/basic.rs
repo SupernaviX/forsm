@@ -1,16 +1,14 @@
-#![cfg(test)]
 use std::str;
 
-mod interpreter;
 use anyhow::{anyhow, Result};
-pub use interpreter::InterpreterRuntime;
 use wasmer::{ImportObject, Instance, MemoryView, Module, Store, Value};
 
-pub struct Runtime {
+/* A minimal runtime to unit test the inner interpreter in isolation */
+pub struct BasicRuntime {
     instance: Instance,
 }
 
-impl Runtime {
+impl BasicRuntime {
     pub fn new<F>(binary: &[u8], imports: F) -> Result<Self>
     where
         F: FnOnce(&Store, &Module) -> ImportObject,
@@ -57,7 +55,6 @@ impl Runtime {
         }
     }
 
-    #[cfg(test)]
     pub fn pop_string(&self) -> Result<String> {
         let len = self.pop()?;
         let start = self.pop()?;

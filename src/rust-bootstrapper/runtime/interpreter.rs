@@ -1,15 +1,14 @@
-#![cfg(test)]
-
 use std::str;
 
 use anyhow::{anyhow, Result};
 use wasmer_wasi::{Pipe, WasiEnv, WasiStateBuilder};
 
-use super::Runtime;
+use super::basic::BasicRuntime;
 
+/* A runtime that includes WASI and can run the Forth interpreter */
 pub struct InterpreterRuntime {
     wasi_env: WasiEnv,
-    runtime: Runtime,
+    runtime: BasicRuntime,
 }
 
 impl InterpreterRuntime {
@@ -20,7 +19,7 @@ impl InterpreterRuntime {
             .preopen_dir(".")?
             .finalize()
             .unwrap();
-        let runtime = Runtime::new(binary, |_, module| wasi_env.import_object(module).unwrap())?;
+        let runtime = BasicRuntime::new(binary, |_, module| wasi_env.import_object(module).unwrap())?;
         Ok(Self { wasi_env, runtime })
     }
 

@@ -1467,16 +1467,16 @@ mod tests {
     use wasmer::{imports, Function, ImportObject, Module, Store};
 
     use super::{ColonValue::*, Compiler};
-    use crate::{compiler::ParamType, runtime::Runtime};
+    use crate::{compiler::ParamType, runtime::BasicRuntime};
 
-    fn build<T>(func: T) -> Result<Runtime>
+    fn build<T>(func: T) -> Result<BasicRuntime>
     where
         T: FnOnce(&mut Compiler),
     {
         build_with_imports(func, |_, _| imports! {})
     }
 
-    fn build_with_imports<T, F>(func: T, imports: F) -> Result<Runtime>
+    fn build_with_imports<T, F>(func: T, imports: F) -> Result<BasicRuntime>
     where
         T: FnOnce(&mut Compiler),
         F: FnOnce(&Store, &Module) -> ImportObject,
@@ -1484,7 +1484,7 @@ mod tests {
         let mut compiler = Compiler::default();
         func(&mut compiler);
         let binary = compiler.compile()?;
-        Runtime::new(&binary, imports)
+        BasicRuntime::new(&binary, imports)
     }
 
     #[test]
