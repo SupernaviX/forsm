@@ -1,6 +1,6 @@
 use std::str;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result};
 use wasmer_wasi::{Pipe, WasiEnv, WasiStateBuilder};
 
 use super::basic::BasicRuntime;
@@ -23,20 +23,10 @@ impl InterpreterRuntime {
         Ok(Self { wasi_env, runtime })
     }
 
-    pub fn start(&self) -> Result<String> {
-        self.execute("_start")?;
-        // assert no errors
-        self.execute("ERROR@")?;
-        let error = self.pop()?;
-        if error != 0 {
-            return Err(anyhow!("Interpretation threw {}", error));
-        }
-        self.read_output()
-    }
-
     pub fn interpret(&self, input: &str) -> Result<String> {
         self.write_input(&format!("{} BYE", input))?;
-        let result = self.start()?;
+        self.execute("_start")?;
+        let result = self.read_output()?;
         // get the prompt out of there
         Ok(result.lines().skip(2).collect::<Vec<&str>>().join("\n"))
     }

@@ -2,23 +2,25 @@ use super::compiler::{ColonValue::*, Compiler, ParamType::*};
 
 /* Build a very basic INTERPRET word */
 pub fn build(compiler: &mut Compiler) {
-    // for now, store errors in here
-    compiler.define_variable_word("ERROR", 0);
-    #[rustfmt::skip]
-    compiler.define_colon_word(
-        "THROW",
-        vec![
-            // store it
-            XT("DUP"), XT("ERROR"), XT("!"),
-            // halt control flow iff it is nonzero
-            QBranch(4), XT("BYE"),
-        ],
-    );
-    compiler.define_colon_word("ERROR@", vec![XT("ERROR"), XT("@")]);
-
+    build_error_handling(compiler);
     build_io(compiler);
     build_parser(compiler);
     build_interpreter(compiler);
+}
+
+fn build_error_handling(compiler: &mut Compiler) {
+    compiler.define_imported_word(
+        "PROC-EXIT",
+        "wasi_snapshot_preview1",
+        "proc_exit",
+        vec![I32],
+        vec![],
+    );
+    // exit the process if the error is nonzero ( err -- )
+    compiler.define_colon_word(
+        "THROW",
+        vec![XT("?DUP"), QBranch(4), XT("PROC-EXIT")],
+    );
 }
 
 fn build_io(compiler: &mut Compiler) {
