@@ -110,6 +110,11 @@ source-buffer0 'source-buffer !
   bl parse
 ;
 
+\ TODO: implement number parsing in here instead of leaning on the host impl
+: binary 2 base ! ;
+: decimal 10 base ! ;
+: hex 16 base ! ;
+
 : s>number? ( c-addr u -- d ? )
   ?number if 0 -1 else 0 0 0 then
 ;
