@@ -174,7 +174,7 @@ source-buffer0 'source-buffer !
             r> base ! \ back to how we started
             bufwrite 4
           endof
-          ( default ) bufwrite 2 \ just write the char
+          ( default ) bufwrite 2 0 \ just write the char
         endcase
       else bufwrite 1
       then ( .. src buffer' incr )

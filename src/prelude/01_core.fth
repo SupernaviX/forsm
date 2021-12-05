@@ -49,6 +49,7 @@ variable chain-sys
   >resolve                    \ end of case
 ; immediate
 : endcase ( -- )
+  postpone drop
   >end-chain \ complete all the forward chaining
 ; immediate
 

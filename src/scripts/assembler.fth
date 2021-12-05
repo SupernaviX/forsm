@@ -19,7 +19,7 @@
     over case \ we are done if the 7th bit of byte matches every bit of n'
       -1 of dup 64 and <>0 endof
       0 of dup 64 and =0 endof
-      ( default ) drop false
+      ( default ) false swap
     endcase ( pad n' byte done? )
     dup >r =0 if 128 or then
     rot tuck c!
