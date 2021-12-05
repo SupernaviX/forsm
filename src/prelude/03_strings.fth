@@ -1,5 +1,10 @@
 32 constant bl
 
+: uppercase? ( c -- ? ) 65 91 within ; \ ascii 'A' to 'Z'
+: lowercase? ( c -- ? ) 97 123 within ; \ asci 'a' to 'z'
+: numeric? ( c -- ? ) 48 58 within ; \ ascii '0' to '9'
+: upcase ( c -- C ) dup lowercase? if 32 - then ;
+
 \ "adjust" the head of a string. Like a more dangerous substring
 : /string ( c-addr1 u1 n -- c-addr2 u2 )
   tuck - -rot + swap

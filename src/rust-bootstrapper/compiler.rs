@@ -1270,12 +1270,16 @@ impl Compiler {
         self.define_native_word("<>", vec![], binary_i32_bool(I32Ne));
         self.define_native_word("D<>", vec![ValueType::I64], binary_i64_bool(I64Ne));
         self.define_native_word("<", vec![], binary_i32_bool(I32LtS));
+        self.define_native_word("U<", vec![], binary_i32_bool(I32LtU));
         self.define_native_word("D<", vec![ValueType::I64], binary_i64_bool(I64LtS));
         self.define_native_word(">", vec![], binary_i32_bool(I32GtS));
+        self.define_native_word("U>", vec![], binary_i32_bool(I32GtU));
         self.define_native_word("D>", vec![ValueType::I64], binary_i64_bool(I64GtS));
         self.define_native_word("<=", vec![], binary_i32_bool(I32LeS));
+        self.define_native_word("U<=", vec![], binary_i32_bool(I32LeU));
         self.define_native_word("D<=", vec![ValueType::I64], binary_i64_bool(I64LeS));
         self.define_native_word(">=", vec![], binary_i32_bool(I32GeS));
+        self.define_native_word("U>=", vec![], binary_i32_bool(I32GeU));
         self.define_native_word("D>=", vec![ValueType::I64], binary_i64_bool(I64GeS));
         self.define_native_word(
             "=0",

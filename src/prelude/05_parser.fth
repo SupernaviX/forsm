@@ -109,17 +109,61 @@ source-buffer0 'source-buffer !
   parse-area bl prefix-length parse-consume \ eat leading spaces
   bl parse
 ;
+\ Now we have a parse-name which reads from the proper source at all times.
 
-\ TODO: implement number parsing in here instead of leaning on the host impl
+variable base host-deferred
 : binary 2 base ! ;
 : decimal 10 base ! ;
 : hex 16 base ! ;
 
-: s>number? ( c-addr u -- d ? )
-  ?number if 0 -1 else 0 0 0 then
+: ?digit ( c -- digit -1 | 0 )
+  upcase \ normalize to uppercase
+  dup numeric?
+    if 48 - true \ subtract '0'
+    else dup uppercase?
+      if 65 - true \ subtract 'a'
+      else drop false \ NaN
+      then
+    then
+  if \ if it's maybe a digit in ANY base
+    dup base @ >= \ but not in THIS base
+    if drop false \ it's not a digit
+    else true
+    then
+  else false
+  then
 ;
 
-\ Now we have a parse-name which reads from the proper source at all times.
+\ accumulate u1 digits from c-addr1 into ud1.
+\ c-addr2 and u2 are however much of the string is left.
+: >number ( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )
+  begin dup
+  while over c@ ?digit
+  while
+    -rot >r >r \ hold onto rest of string for l8r
+    >r base @ ud* \ move the accumulated sum up a digit
+    r> 0 d+ \ add the new digit
+    r> 1+ r> 1- \ and increment the string
+  repeat then
+;
+
+\ try to parse an unsigned number
+: s>unumber? ( c-addr u -- ud ? )
+  0 0 2swap >number nip =0
+;
+
+\ try to parse a number
+: s>number? ( c-addr u -- d ? )
+  over c@ 45 = dup >r
+    if 1 /string
+    then
+  s>unumber?
+    if
+      r> if -1 d* then
+      true
+    else r> drop false
+    then
+;
 
 \ Define some nice-to-have utilities 
 \ get the ascii value of the next character
@@ -170,7 +214,7 @@ source-buffer0 'source-buffer !
           [char] z of 0 bufwrite 2 endof \ null
           [char] x of \ 2-digit hex literal
             base @ >r 16 base ! \ switch to hex for a sec
-            over 2 + 2 ?number =0 throw \ parse a 2-digit hex number
+            over 2 + 2 s>unumber? =0 throw drop \ parse a 2-digit hex number
             r> base ! \ back to how we started
             bufwrite 4
           endof

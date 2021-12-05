@@ -135,3 +135,8 @@ variable catch-depth
   r> catch-depth ! \ restore the old catch depth
   \ now that we've messed with the return stack, we're actually returning from "catch"
 ;
+
+\ other utilities
+: within ( n1 start end -- ? )
+  over - >r - r> u<
+;

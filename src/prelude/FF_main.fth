@@ -7,6 +7,7 @@
 ;
 
 : main
+  decimal
   parse-args
   ." Go forth! Type bye to quit" cr
   here dict-base -
