@@ -441,7 +441,32 @@ impl Compiler {
         self.define_native_word(
             "OVER",
             vec![],
-            vec![GetGlobal(stack), I32Load(2, 4), Call(push)],
+            vec![
+                GetGlobal(stack),
+                I32Const(4),
+                I32Sub,
+                TeeLocal(0),
+                SetGlobal(stack),
+                GetLocal(0),
+                GetLocal(0),
+                I32Load(2, 8),
+                I32Store(2, 0),
+            ],
+        );
+        self.define_native_word(
+            "2OVER",
+            vec![],
+            vec![
+                GetGlobal(stack),
+                I32Const(8),
+                I32Sub,
+                TeeLocal(0),
+                SetGlobal(stack),
+                GetLocal(0),
+                GetLocal(0),
+                I64Load(2, 16),
+                I64Store(2, 0),
+            ],
         );
         self.define_native_word(
             "NIP",
@@ -1744,6 +1769,18 @@ mod tests {
         runtime.execute("?DUP").unwrap();
         assert_eq!(runtime.pop().unwrap(), 0);
         assert_eq!(runtime.pop().unwrap(), 1337);
+    }
+
+    #[test]
+    fn should_over() {
+        let runtime = build(|_| {}).unwrap();
+
+        runtime.push(1).unwrap();
+        runtime.push(2).unwrap();
+        runtime.execute("OVER").unwrap();
+        assert_eq!(runtime.pop().unwrap(), 1);
+        assert_eq!(runtime.pop().unwrap(), 2);
+        assert_eq!(runtime.pop().unwrap(), 1);
     }
 
     #[test]
