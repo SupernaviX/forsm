@@ -1032,18 +1032,22 @@ impl Compiler {
                 GetLocal(2),
                 I32RemS,
                 SetLocal(4), // store remainder as well
-                // To find the "real" mod, add divisor if quotient is negative
+                // To find the "real" mod, add divisor if quotient <= 0 and remainder <> 0
                 GetLocal(4),
                 GetLocal(2),
                 I32Const(0),
                 GetLocal(3),
                 I32Const(0),
-                I32LtS,
+                I32LeS,
+                GetLocal(4),
+                I32Const(0),
+                I32Ne,
+                I32And,
                 TeeLocal(0),
                 Select,
                 I32Add,
                 Call(push),
-                // To find the "real" quotient, subtract 1 if it is negative
+                // To find the "real" quotient, subtract 1 if quotient <= 0 and remainder <> 0
                 GetLocal(3),
                 I32Const(1),
                 I32Const(0),
@@ -1117,19 +1121,23 @@ impl Compiler {
                 GetLocal(3),
                 I64RemS,
                 SetLocal(5), // store remainder as well
-                // To find the "real" mod, subtract dividend if quotient is negative
+                // To find the "real" mod, subtract dividend if quotient <= 0 and remainder <> 0
                 GetLocal(5),
                 GetLocal(2),
                 I64Const(0),
                 GetLocal(4),
                 I64Const(0),
-                I64LtS,
+                I64LeS,
+                GetLocal(5),
+                I64Const(0),
+                I64Ne,
+                I32And,
                 TeeLocal(0),
                 Select,
                 I64Sub,
                 I32WrapI64,
                 Call(push),
-                // To find the "real" quotient, add 1 if it is negative
+                // To find the "real" quotient, add 1 if quotient <= 0 and remainder <> 0
                 GetLocal(4),
                 I64Const(1),
                 I64Const(0),
@@ -1575,6 +1583,11 @@ mod tests {
             ((-7, 4), (-2, 1)),
             ((7, -4), (-2, -1)),
             ((-7, -4), (1, -3)),
+            ((-2, 1), (-2, 0)),
+            ((-2, 2), (-1, 0)),
+            ((-2, 3), (-1, 1)),
+            ((-2, 4), (-1, 2)),
+            ((8, -8), (-1, 0)),
         ];
 
         let results: Vec<TestCase> = test_cases
