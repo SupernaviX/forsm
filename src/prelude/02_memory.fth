@@ -34,6 +34,18 @@
     then
 ;
 
+\ fill contents with a character
+: fill ( c-addr u c -- )
+  >r
+  begin ?dup
+  while
+    1- swap
+    r@ over c!
+    1+ swap
+  repeat
+  r> 2drop
+;
+
 : heap-limit ( -- addr ) memory.size 16 lshift 1 - ;
 : grow-heap-if-needed ( target-max -- failed? )
   65535 + 16 rshift memory.size - \ find the number of pages to request
