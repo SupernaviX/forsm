@@ -140,3 +140,14 @@ variable catch-depth
 : within ( n1 start end -- ? )
   over - >r - r> u<
 ;
+
+\ double utilities
+: 2@ ( addr -- d )
+  dup @ swap cell + @
+;
+: 2! ( d addr -- )
+  tuck cell + ! !
+;
+: 2>r ( d -- )  postpone swap postpone >r postpone >r ; immediate
+: 2r> ( -- d )  postpone r> postpone r> postpone swap ; immediate
+: 2r@ ( -- d )  postpone 2r> postpone 2dup postpone 2>r ; immediate
