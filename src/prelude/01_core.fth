@@ -143,10 +143,10 @@ variable catch-depth
 
 \ double utilities
 : 2@ ( addr -- d )
-  dup @ swap cell + @
+  dup @ swap 4 + @
 ;
 : 2! ( d addr -- )
-  tuck cell + ! !
+  tuck 4 + ! !
 ;
 : 2>r ( d -- )  postpone swap postpone >r postpone >r ; immediate
 : 2r> ( -- d )  postpone r> postpone r> postpone swap ; immediate
