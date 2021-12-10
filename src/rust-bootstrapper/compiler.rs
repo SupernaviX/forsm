@@ -1032,13 +1032,15 @@ impl Compiler {
                 GetLocal(2),
                 I32RemS,
                 SetLocal(4), // store remainder as well
-                // To find the "real" mod, add divisor if quotient <= 0 and remainder <> 0
+                // To find the "real" mod, add divisor if numerator+denominator have misnatched signs and remainder <> 0
                 GetLocal(4),
                 GetLocal(2),
                 I32Const(0),
-                GetLocal(3),
+                GetLocal(1),
+                GetLocal(2),
+                I32Xor,
                 I32Const(0),
-                I32LeS,
+                I32LtS,
                 GetLocal(4),
                 I32Const(0),
                 I32Ne,
@@ -1047,7 +1049,7 @@ impl Compiler {
                 Select,
                 I32Add,
                 Call(push),
-                // To find the "real" quotient, subtract 1 if quotient <= 0 and remainder <> 0
+                // To find the "real" quotient, subtract 1 if numerator+denominator have misnatched signs and remainder <> 0
                 GetLocal(3),
                 I32Const(1),
                 I32Const(0),
@@ -1121,13 +1123,15 @@ impl Compiler {
                 GetLocal(3),
                 I64RemS,
                 SetLocal(5), // store remainder as well
-                // To find the "real" mod, subtract dividend if quotient <= 0 and remainder <> 0
+                // To find the "real" mod, subtract dividend if numerator+denominator have misnatched signs and remainder <> 0
                 GetLocal(5),
                 GetLocal(2),
                 I64Const(0),
-                GetLocal(4),
+                GetLocal(2),
+                GetLocal(3),
+                I64Xor,
                 I64Const(0),
-                I64LeS,
+                I64LtS,
                 GetLocal(5),
                 I64Const(0),
                 I64Ne,
@@ -1579,6 +1583,7 @@ mod tests {
         type TestCase = ((i32, i32), (i32, i32));
 
         let test_cases: Vec<TestCase> = vec![
+            ((1, 10), (0, 1)),
             ((7, 4), (1, 3)),
             ((-7, 4), (-2, 1)),
             ((7, -4), (-2, -1)),
