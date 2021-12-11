@@ -70,7 +70,7 @@ pub struct Compiler {
 
 const DICTIONARY_BASE: i32 = 0x1000;
 const PARAM_STACK_BASE: i32 = 0xef00;
-const RETURN_STACK_BASE: i32 = 0xf000;
+const RETURN_STACK_BASE: i32 = 0xf100;
 const HEAP_BASE: i32 = 0xf100;
 
 const DICTIONARY_CAPACITY: i32 = PARAM_STACK_BASE - DICTIONARY_BASE;
