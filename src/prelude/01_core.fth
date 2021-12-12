@@ -108,9 +108,14 @@ variable chain-sys
   >end-chain
 ; immediate
 
+\ allow an early exit from a loop
+: unloop
+  postpone r> postpone r> postpone 2drop
+; immediate
+
 \ exit the loop early
 : leave
-  postpone r> postpone r> postpone 2drop
+  postpone unloop
   postpone branch >mark-chain
 ; immediate
 

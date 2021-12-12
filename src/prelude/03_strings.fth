@@ -5,6 +5,11 @@
 : numeric? ( c -- ? ) 48 58 within ; \ ascii '0' to '9'
 : upcase ( c -- C ) dup lowercase? if 32 - then ;
 
+\ convert a length-prefixed string to a "normal" string
+: count ( str -- c-addr u )
+  dup 1+ swap c@
+;
+
 \ "adjust" the head of a string. Like a more dangerous substring
 : /string ( c-addr1 u1 n -- c-addr2 u2 )
   tuck - -rot + swap
