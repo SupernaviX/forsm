@@ -296,7 +296,7 @@ compilebuf 256 init-buf
   dup compile-uint
   compile-bytes
 ;
-16 base !
+hex
 : encode-primitive ( c -- c )
   case
     [char] c of 7f endof
@@ -304,7 +304,7 @@ compilebuf 256 init-buf
     ( default ) 420 throw \ unrecognized char
   endcase
 ;
-a base !
+decimal
 : compile-primitives ( c-addr u -- )
   dup compile-uint
   begin ?dup
@@ -322,7 +322,7 @@ a base !
     then
 ;
 
-16 base !
+hex
 \ accepts signatures like "{cc-d}"
 : parse-signature ( c-addr u -- c-addr u )
   swap 1+ swap 2 - \ trim the curlies off 
@@ -333,7 +333,7 @@ a base !
   compile-primitives
   compile-stop
 ;
-a base !
+decimal
 
 : +type ( c-addr u -- index )
   current-program @ program.type >r
@@ -428,7 +428,7 @@ a base !
   current-program @ program.start !
 ;
 
-16 base !
+hex
 : loop_         ( blocktype -- )    03 compile-byte compile-byte ;
 : if_           ( blocktype -- )    04 compile-byte compile-byte ;
 : else_         ( -- )              05 compile-byte ;
@@ -452,7 +452,7 @@ a base !
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;
 : i32.div_s     ( -- )              6d compile-byte ;
-a base !
+decimal
 
 : elemsec: ( table -- )
   compile-start
