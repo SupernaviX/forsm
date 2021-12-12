@@ -12,6 +12,11 @@ variable funcref#
 1 0 +memory
 0 elemsec: 0 i32.const elemsec; elemsec!
 
+: make-callable ( func -- index )
+  1 funcref# +!
+  +elem
+;
+
 \ assembly utils
 : add ( n -- )  i32.const i32.add ;
 : sub ( n -- )  i32.const i32.sub ;
@@ -64,19 +69,42 @@ DICT_SIZE dictbuf init-to-zero
 \ Utilities for manually constructing the data dictionary
 : v-@ ( u -- n ) dict[] @ ;
 : v-! ( n u -- ) dict[] ! ;
+: v-c@ ( u -- c ) dict[] c@ ;
+: v-c! ( c u -- ) dict[] c! ;
 variable v-cp
 DICT_START v-cp !
+variable v-latest
+0 v-latest !
+
 : v-here ( -- n ) v-cp @ ;
 : v-, ( n -- )
   v-here v-!
   cell v-cp +!
 ;
-: make-callable ( func -- index )
-  1 funcref# +!
-  +elem
+: v-c, ( n -- )
+  v-here v-c!
+  1 v-cp +!
 ;
-: make-native ( func -- address )
-  v-here swap make-callable v-,
+
+: v-header ( c-addr u -- )
+  v-here >r
+  dup v-c,
+  begin ?dup
+  while over c@ v-c, 1 /string
+  repeat drop
+  v-cp @ aligned v-cp !
+  v-latest v-,
+  r> v-latest !
+;
+: v-name>xt ( v-nt -- v-xt )
+  dup v-c@ 1+ aligned + cell +
+;
+: v-latestxt ( -- v-xt )
+  v-latest @ v-name>xt
+;
+: make-native ( func -- )
+  parse-name v-header
+  make-callable v-,
 ;
 
 \ Execution starts at the head of the dict.
@@ -95,19 +123,27 @@ func: {c-}
 func; make-callable constant (docol)
 func: {c-}
   (rpop) call 4 add ip!
-func; make-native constant 'exit
+func; make-native exit
+v-latestxt constant 'exit
+
+: make-colon ( -- )
+  parse-name v-header
+  (docol) v-,  
+;
 
 \ literals are stored inline so they require messing with the IP
 func: {c-}
   ip@ 0 local.tee
   4 cell.load (push) call
   0 local.get 8 add ip!
-func; make-native constant 'lit
+func; make-native lit
+v-latestxt constant 'lit
 
 \ branches!
 func: {c-}
   ip@ 4 cell.load ip!
-func; make-native constant 'branch
+func; make-native branch
+v-latestxt constant 'branch
 
 \ conditional branches!
 func: {c-}
@@ -116,31 +152,36 @@ func: {c-}
     else_ ip@ 8 add
     end
   ip!
-func; make-native constant '?branch
+func; make-native ?branch
+v-latestxt constant '?branch
 
 \ exit with some status code
 \ for now, the exit code is the only functioning output
 func: {c-}
   (pop) call 0 call
-next func; make-native constant 'abort
+next func; make-native abort
+v-latestxt constant 'abort
 
 func: {c-}
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
-next func; make-native constant 'dup
+next func; make-native dup
+v-latestxt constant 'dup
 
 func: {c-}
   (pop) call (pop) call
   i32.add
   (push) call
-next func; make-native constant '+
+next func; make-native +
+v-latestxt constant '+
 
 func: {c-}
   (pop) call (pop) call
   i32.mul
   (push) call
-next func; make-native constant '*
+next func; make-native *
+v-latestxt constant '*
 
 funcref# @ 0 +funcref-table
 
@@ -152,20 +193,22 @@ func: {-} \ inner interpreter
 func; is-start
 
 \ handwritten colon definitions currently look like this
-v-here constant 'square (docol) v-,
+make-colon square
   'dup v-,
   '* v-,
 'exit v-,
+v-latestxt constant 'square
 
-v-here constant 'condtest (docol) v-,
+make-colon condtest
   '?branch v-, v-here 0 v-,
     'lit v-, 5 v-,
   'branch v-, v-here 0 v-, swap v-here swap v-!
     'lit v-, 6 v-,
   v-here swap v-!
 'exit v-,
+v-latestxt constant 'condtest
 
-v-here constant 'main (docol) v-,
+make-colon main
   'lit v-, 8 v-,
   'square v-,
   'lit v-, -1 v-,
@@ -173,6 +216,7 @@ v-here constant 'main (docol) v-,
   '+ v-,
   'abort v-,
 'exit v-,
+v-latestxt constant 'main
 
 'main DICT_START v-!
 
