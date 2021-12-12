@@ -54,29 +54,37 @@ func: {-c} locals c
   0 local.get 4 add rp!
 func; constant (rpop)
 
-\ Utilities for manually constructing the data dictionary
 256 constant DICT_START
+256 constant DICT_SIZE
 0 datasec: DICT_START i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
-: dict-here ( -- n ) dictbuf buf.len @ DICT_START + ;
-: dict, ( n -- ) dictbuf push-cell ;
+: dict[] ( u -- u ) DICT_START - dictbuf buf[] ;
+DICT_SIZE dictbuf init-to-zero
+
+\ Utilities for manually constructing the data dictionary
+: v-@ ( u -- n ) dict[] @ ;
+: v-! ( n u -- ) dict[] ! ;
+variable v-cp
+DICT_START v-cp !
+: v-here ( -- n ) v-cp @ ;
+: v-, ( n -- )
+  v-here v-!
+  cell v-cp +!
+;
 : make-callable ( func -- index )
   1 funcref# +!
   +elem
 ;
 : make-native ( func -- address )
-  dict-here swap make-callable dict,
+  v-here swap make-callable v-,
 ;
 
-\ Add another data section named "execution"
-\ it's just the place in memory where we start execution
-512 constant EXECUTION_START
-0 datasec: EXECUTION_START i32.const datasec;
-: execbuf ( -- buf ) literal databuf[] ;
-: exec, ( n -- ) execbuf push-cell ;
+\ Execution starts at the head of the dict.
+\ Reserve space for a "call main" instruction there later.
+0 v-,
 
 \ the instruction pointer, (docol) and 'exit give us functions
-global: cmut EXECUTION_START i32.const global; constant ip
+global: cmut DICT_START i32.const global; constant ip
 : ip@ ( -- ) ip global.get ;
 : ip! ( -- ) ip global.set ;
 : next ( -- ) ip@ 4 add ip! ;
@@ -144,28 +152,29 @@ func: {-} \ inner interpreter
 func; is-start
 
 \ handwritten colon definitions currently look like this
-dict-here constant 'square (docol) dict,
-  'dup dict,
-  '* dict,
-'exit dict,
+v-here constant 'square (docol) v-,
+  'dup v-,
+  '* v-,
+'exit v-,
 
-dict-here constant 'condtest (docol) dict,
-  dict-here '?branch dict, 24 + dict,
-    'lit dict, 5 dict,
-  dict-here 'branch dict, 16 + dict,
-    'lit dict, 6 dict,
-'exit dict,
+v-here constant 'condtest (docol) v-,
+  '?branch v-, v-here 0 v-,
+    'lit v-, 5 v-,
+  'branch v-, v-here 0 v-, swap v-here swap v-!
+    'lit v-, 6 v-,
+  v-here swap v-!
+'exit v-,
 
-dict-here constant 'main (docol) dict,
-  'lit dict, 8 dict,
-  'square dict,
-  'lit dict, -1 dict,
-  'condtest dict,
-  '+ dict,
-'exit dict,
+v-here constant 'main (docol) v-,
+  'lit v-, 8 v-,
+  'square v-,
+  'lit v-, -1 v-,
+  'condtest v-,
+  '+ v-,
+  'abort v-,
+'exit v-,
 
-'main exec,
-'abort exec,
+'main DICT_START v-!
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !

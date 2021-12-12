@@ -83,6 +83,13 @@ end-struct |buf|
   over swap reserve-space
   swap cmove
 ;
+: init-to-zero ( size buf -- )
+  tuck buf.len @ - over reserve-space drop
+  dup buf.data @ swap buf.len @ 0 fill
+;
+: buf[] ( u buf -- u )
+  buf.data @ +
+;
 
 struct
   |buf| field vec.buf
