@@ -121,7 +121,7 @@ variable base host-deferred
   dup numeric?
     if 48 - true \ subtract '0'
     else dup uppercase?
-      if 65 - true \ subtract 'a'
+      if 55 - true \ subtract 'a' add 10
       else drop false \ NaN
       then
     then
