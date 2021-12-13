@@ -60,7 +60,7 @@ func: {-c} locals c
 func; constant (rpop)
 
 256 constant DICT_START
-256 constant DICT_SIZE
+512 constant DICT_SIZE
 0 datasec: DICT_START i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
 : dict[] ( u -- u ) DICT_START - dictbuf buf[] ;
@@ -69,47 +69,79 @@ DICT_SIZE dictbuf init-to-zero
 \ Utilities for manually constructing the data dictionary
 : v-@ ( u -- n ) dict[] @ ;
 : v-! ( n u -- ) dict[] ! ;
+: v-+! ( n u -- ) dict[] +! ;
 : v-c@ ( u -- c ) dict[] c@ ;
 : v-c! ( c u -- ) dict[] c! ;
-variable v-cp
-DICT_START v-cp !
-variable v-latest
-0 v-latest !
+: v-name>xt ( v-nt -- v-xt )
+  dup v-c@ 1+ aligned + cell +
+;
 
-: v-here ( -- n ) v-cp @ ;
+\ variable and constant support
+func: {c-}
+  0 local.get (push) call
+func; make-callable constant (dovar)
+func: {c-}
+  0 local.get 0 cell.load (push) call
+func; make-callable constant (docon)
+
+\ manually compile a "CP" variable
+DICT_START cell + \ leave one cell at the start for the "main" XT
+dup \ hold onto this address for later
+2 over v-c! 1+
+char C over v-c! 1+
+char P over v-c! 1+
+aligned
+0 over v-! cell +
+(dovar) over v-! cell +
+dup cell + swap v-!
+
+\ use that variable for some compilation utilities
+dup v-name>xt cell + constant >cp
+
+: v-here ( -- n ) >cp v-@ ;
 : v-, ( n -- )
   v-here v-!
-  cell v-cp +!
+  cell >cp v-+!
 ;
 : v-c, ( n -- )
   v-here v-c!
-  1 v-cp +!
+  1 >cp v-+!
 ;
+: v-align ( -- ) v-here aligned >cp v-! ;
 
+\ while CP's address is on the stack, compile "LATEST" as well
+v-here swap ( nt-of-latest nt-of-cp )
+6 v-c,
+char L v-c,
+char A v-c,
+char T v-c,
+char E v-c,
+char S v-c,
+char T v-c,
+v-align
+v-, \ the NT for "CP" is still on top of the stack
+(dovar) v-,
+dup v-, \ this word's NT is the right value for LATEST
+v-name>xt cell + constant >latest
+
+\ with CP and LATEST, we can define a HEADER utility
 : v-header ( c-addr u -- )
   v-here >r
   dup v-c,
   begin ?dup
   while over c@ v-c, 1 /string
   repeat drop
-  v-cp @ aligned v-cp !
-  v-latest v-,
-  r> v-latest !
-;
-: v-name>xt ( v-nt -- v-xt )
-  dup v-c@ 1+ aligned + cell +
+  >cp v-@ aligned >cp v-!
+  >latest v-@ v-,
+  r> >latest v-!
 ;
 : v-latestxt ( -- v-xt )
-  v-latest @ v-name>xt
+  >latest v-@ v-name>xt
 ;
 : make-native ( func -- )
   parse-name v-header
   make-callable v-,
 ;
-
-\ Execution starts at the head of the dict.
-\ Reserve space for a "call main" instruction there later.
-0 v-,
 
 \ the instruction pointer, (docol) and 'exit give us functions
 global: cmut DICT_START i32.const global; constant ip

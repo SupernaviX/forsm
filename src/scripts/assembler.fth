@@ -363,7 +363,7 @@ decimal
 : blocktype: ( -- index )
   char
   dup [char] 0 =
-    if [ base @ 16 base ! ] 40 [ base ! ]
+    if [ base @ 16 base ! ] drop 40 [ base ! ]
     else encode-primitive
     then
 ;
