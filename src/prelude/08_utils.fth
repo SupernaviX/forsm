@@ -8,3 +8,19 @@
   create over , +
   does> @ +
 ;
+
+: noop ( -- ) ;
+: defer ( -- )
+  create ['] noop ,
+  does> ( -- ) @ execute 
+;
+: defer! ( xt defer-xt -- )
+  >body !
+;
+: is ( xt -- )
+  compiling? if
+    postpone ['] postpone defer!
+  else
+    ' defer!
+  then
+; immediate
