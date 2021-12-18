@@ -120,6 +120,11 @@ variable chain-sys
 ; immediate
 
 : i ( -- n ) postpone r@ ; immediate
+: j ( -- n )
+  postpone r> postpone r>
+  postpone r@ postpone -rot
+  postpone >r postpone >r
+; immediate
 
 \ exceptions!
 variable catch-depth
