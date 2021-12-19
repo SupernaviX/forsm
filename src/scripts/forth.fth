@@ -75,6 +75,9 @@ DICT_SIZE dictbuf init-to-zero
 : v-name>xt ( v-nt -- v-xt )
   dup v-c@ 1+ aligned + cell +
 ;
+: v-name>u ( v-nt -- u ) v-c@ 31 and ;
+: v-name>string ( v-nt -- vc-addr u ) dup 1+ swap v-name>u ;
+: v-name>backword ( v-nt -- v-nt ) dup v-name>u 1+ + aligned v-@ ;
 
 \ variable and constant support
 func: {c-}
@@ -142,8 +145,39 @@ v-name>xt cell + constant >latest
   parse-name v-header
   make-callable v-,
 ;
+: v-name= ( c-addr u v-c-addr u -- ? )
+  rot over <> if
+    drop 2drop false exit
+  then
+  0 ?do ( c-addr v-c-addr )
+    over c@ upchar over v-c@ upchar <> if
+      2drop false unloop exit
+    then
+    1+ swap 1+ swap
+  loop
+  2drop true
+;
+: v-find-name ( c-addr u -- v-nt | 0 )
+  >latest v-@
+  begin ?dup
+  while ( c-addr u v-nt )
+    >r 2dup r@ v-name>string v-name= if
+      2drop r> exit
+    then
+    r> v-name>backword
+  repeat
+  2drop false
+;
+: v-' ( -- xt )
+  parse-name 2dup v-find-name ?dup
+    if nip nip v-name>xt
+    else
+      ." Word not available in target forth: "
+      140 throw
+    then
+;
 
-\ the instruction pointer, (docol) and 'exit give us functions
+\ the instruction pointer, (docol) and exit give us functions
 global: cmut DICT_START i32.const global; constant ip
 : ip@ ( -- ) ip global.get ;
 : ip! ( -- ) ip global.set ;
@@ -156,7 +190,6 @@ func; make-callable constant (docol)
 func: {c-}
   (rpop) call 4 add ip!
 func; make-native exit
-v-latestxt constant 'exit
 
 : make-colon ( -- )
   parse-name v-header
@@ -169,13 +202,11 @@ func: {c-}
   4 cell.load (push) call
   0 local.get 8 add ip!
 func; make-native lit
-v-latestxt constant 'lit
 
 \ branches!
 func: {c-}
   ip@ 4 cell.load ip!
 func; make-native branch
-v-latestxt constant 'branch
 
 \ conditional branches!
 func: {c-}
@@ -185,35 +216,30 @@ func: {c-}
     end
   ip!
 func; make-native ?branch
-v-latestxt constant '?branch
 
 \ exit with some status code
 \ for now, the exit code is the only functioning output
 func: {c-}
   (pop) call 0 call
 next func; make-native abort
-v-latestxt constant 'abort
 
 func: {c-}
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
 next func; make-native dup
-v-latestxt constant 'dup
 
 func: {c-}
   (pop) call (pop) call
   i32.add
   (push) call
 next func; make-native +
-v-latestxt constant '+
 
 func: {c-}
   (pop) call (pop) call
   i32.mul
   (push) call
 next func; make-native *
-v-latestxt constant '*
 
 funcref# @ 0 +funcref-table
 
@@ -226,31 +252,28 @@ func; is-start
 
 \ handwritten colon definitions currently look like this
 make-colon square
-  'dup v-,
-  '* v-,
-'exit v-,
-v-latestxt constant 'square
+  v-' dup v-,
+  v-' * v-,
+v-' exit v-,
 
 make-colon condtest
-  '?branch v-, v-here 0 v-,
-    'lit v-, 5 v-,
-  'branch v-, v-here 0 v-, swap v-here swap v-!
-    'lit v-, 6 v-,
+  v-' ?branch v-, v-here 0 v-,
+    v-' lit v-, 5 v-,
+  v-' branch v-, v-here 0 v-, swap v-here swap v-!
+    v-' lit v-, 6 v-,
   v-here swap v-!
-'exit v-,
-v-latestxt constant 'condtest
+v-' exit v-,
 
 make-colon main
-  'lit v-, 8 v-,
-  'square v-,
-  'lit v-, -1 v-,
-  'condtest v-,
-  '+ v-,
-  'abort v-,
-'exit v-,
-v-latestxt constant 'main
+  v-' lit v-, 8 v-,
+  v-' square v-,
+  v-' lit v-, -1 v-,
+  v-' condtest v-,
+  v-' + v-,
+  v-' abort v-,
+v-' exit v-,
 
-'main DICT_START v-!
+v-' main DICT_START v-!
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !
