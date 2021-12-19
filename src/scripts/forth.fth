@@ -172,7 +172,7 @@ v-name>xt cell + constant >latest
   parse-name 2dup v-find-name ?dup
     if nip nip v-name>xt
     else
-      ." Word not available in target forth: "
+      ." Word not available in target forth: " type cr
       140 throw
     then
 ;
@@ -250,6 +250,63 @@ func: {-} \ inner interpreter
   end
 func; is-start
 
+\ Use a virtual IP and return stack to emulate words during compilation
+variable v-ip
+create v-rstack 256 allot
+here constant v-r0
+variable v-rp
+v-r0 v-rp !
+: v->r ( value -- ) -4 v-rp +! v-rp @ !  ;
+: v-r> ( -- value ) v-rp @ @ 4 v-rp +! ;
+: v-rdepth ( -- u ) v-r0 v-rp @ - 2/ 2/ ;
+
+: callable' ( -- callable )
+  ['] lit , v-' v-@ ,
+; immediate
+
+\ Given an XT from the virtual interpreter, run it
+: v-execute' ( v-xt -- )
+  >r r@ v-@
+  case
+    (docol) of
+      v-ip @ v->r \ store current ip on the return stack
+      r@ cell + v-ip ! \ new ip is the colon definition
+    endof
+    callable' exit of
+      v-r> cell + v-ip ! \ pop return stack + 4 into ip
+    endof
+    callable' lit of
+      v-ip @ cell + v-@ \ read literal from next cell
+      2 cells v-ip +! \ jump past it
+    endof
+    callable' branch of
+      v-ip @ cell + v-@ v-ip !
+    endof
+    callable' ?branch of =0
+      if v-ip @ cell + v-@ v-ip !
+      else 2 cells v-ip +!
+      then
+    endof
+    cell v-ip +!  \ everything below this line just increments IP normally
+    (dovar) of r@ cell + endof
+    (docon) of r@ cell + v-@ endof
+    callable' dup of dup endof
+    callable' + of + endof
+    callable' * of * endof
+    ( default )
+      ." Callable not supported: " dup . cr
+      140 throw
+  endcase
+  r> drop
+;
+\ Given an XT from the virtual interpreter, run it
+: v-execute ( v-xt -- )
+  v-execute' \ execute the first XT
+  begin v-rdepth \ if it was a colon definition,
+  while v-ip @ v-@ v-execute' \ keep executing until it's done
+  repeat
+;
+
 \ handwritten colon definitions currently look like this
 make-colon square
   v-' dup v-,
@@ -274,6 +331,10 @@ make-colon main
 v-' exit v-,
 
 v-' main DICT_START v-!
+
+3 v-' square v-execute .
+-1 v-' condtest v-execute .
+0 v-' condtest v-execute .
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !

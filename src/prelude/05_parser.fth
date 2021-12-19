@@ -179,6 +179,9 @@ variable base host-deferred
   dup =0 if -2 throw then
   name>xt
 ;
+: ['] ( -- xt )
+  ' lit lit , ,
+; immediate
 : create parse-name header ;
 : variable ( -- ) create 0 , ;
 : constant ( val -- ) create (docon) xt, , ;
