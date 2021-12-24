@@ -48,7 +48,7 @@
 
 : heap-limit ( -- addr ) memory.size 16 lshift 1 - ;
 : grow-heap-if-needed ( target-max -- failed? )
-  65535 + 16 rshift memory.size - \ find the number of pages to request
+  16 rshift 1+ memory.size - \ find the number of pages to request
   dup >0
     if memory.grow -1 = \ wasm returns -1 on failure
     else drop 0
