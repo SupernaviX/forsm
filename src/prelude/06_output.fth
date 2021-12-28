@@ -1,5 +1,6 @@
-: cr 10 emit ;
-: space bl emit ;
+: cr ( -- ) 10 emit ;
+: space ( -- ) bl emit ;
+: spaces ( i -- ) 0 ?do space loop ;
 
 \ quick numeric utilities
 : pad here 340 + ;
