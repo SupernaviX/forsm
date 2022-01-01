@@ -1,5 +1,16 @@
 include ./assembler.fth
 
+\ rough memory map
+hex
+\ the first 16 bytes are unused so that 0 is never a valid pointer
+0010 constant TIB_BASE \ input buffer
+0100 constant DICT_BASE \ The dictionary. The cell AT this address is main.
+ed00 constant PARAM_STACK_BASE \ the HIGHEST address in the param stack (stacks grow down)
+f100 constant RETURN_STACK_BASE \ likewise for the return stack
+decimal
+
+DICT_BASE TIB_BASE - constant TIB_CAPACITY
+
 create program |program| allot
 program init-program
 program program!
@@ -32,7 +43,7 @@ func: {c-}
 func; constant (execute)
 
 \ Implement the data stack, with push and pop
-global: cmut 256 i32.const global; constant stack
+global: cmut PARAM_STACK_BASE i32.const global; constant stack
 : stack@ ( -- ) stack global.get ;
 : stack! ( -- ) stack global.set ;
 func: {c-} locals c
@@ -46,7 +57,7 @@ func: {-c} locals c
 func; constant (pop)
 
 \ Implement the return stack with its own push and pop
-global: cmut 128 i32.const global; constant rp
+global: cmut RETURN_STACK_BASE i32.const global; constant rp
 : rp@ ( -- ) rp global.get ;
 : rp! ( -- ) rp global.set ;
 func: {c-} locals c
@@ -59,11 +70,11 @@ func: {-c} locals c
   0 local.get 4 add rp!
 func; constant (rpop)
 
-256 constant DICT_START
-512 constant DICT_SIZE
-0 datasec: DICT_START i32.const datasec;
+\ TODO: this dict should grow as needed
+hex 1000 decimal constant DICT_SIZE
+0 datasec: TIB_BASE i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
-: dict[] ( u -- u ) DICT_START - dictbuf buf[] ;
+: dict[] ( u -- u ) TIB_BASE - dictbuf buf[] ;
 DICT_SIZE dictbuf init-to-zero
 
 \ Utilities for manually constructing the data dictionary
@@ -78,6 +89,7 @@ DICT_SIZE dictbuf init-to-zero
 : v-name>u ( v-nt -- u ) v-c@ 31 and ;
 : v-name>string ( v-nt -- vc-addr u ) dup 1+ swap v-name>u ;
 : v-name>backword ( v-nt -- v-nt ) dup v-name>u 1+ + aligned v-@ ;
+: v-name>immediate? ( v-nt -- ? ) v-c@ 64 and <>0 ;
 
 \ variable and constant support
 func: {c-}
@@ -88,7 +100,7 @@ func: {c-}
 func; make-callable constant (docon)
 
 \ manually compile a "CP" variable
-DICT_START cell + \ leave one cell at the start for the "main" XT
+DICT_BASE cell + \ leave one cell at the start for the "main" XT
 dup \ hold onto this address for later
 2 over v-c! 1+
 char C over v-c! 1+
@@ -145,6 +157,11 @@ v-name>xt cell + constant >latest
   parse-name v-header
   make-callable v-,
 ;
+: make-variable ( initial -- )
+  parse-name v-header
+  (dovar) v-,
+  v-,
+;
 : v-name= ( c-addr u v-c-addr u -- ? )
   rot over <> if
     drop 2drop false exit
@@ -176,9 +193,13 @@ v-name>xt cell + constant >latest
       140 throw
     then
 ;
+: [v-'] ( -- )
+  v-'
+  lit lit , ,
+; immediate
 
 \ the instruction pointer, (docol) and exit give us functions
-global: cmut DICT_START i32.const global; constant ip
+global: cmut DICT_BASE i32.const global; constant ip
 : ip@ ( -- ) ip global.get ;
 : ip! ( -- ) ip global.set ;
 : next ( -- ) ip@ 4 add ip! ;
@@ -307,6 +328,119 @@ v-r0 v-rp !
   repeat
 ;
 
+0 make-variable state
+: v-compiling? ( -- ? ) [v-'] state v-execute' v-@ ;
+: v-unrecognized-word ( c-addr u -- )
+  ." Unrecognized word: " type cr
+  -14 throw
+;
+: v-tried-compiling-host-word ( c-addr u -- )
+  ." Cannot compile host word: " type cr
+  -15 throw
+;
+
+\ Given a string, evaluate it through the firtual interpreter
+: v-evaluate ( c-addr u -- )
+  2dup v-find-name ?dup if
+    nip nip
+    \ deal with virtual XT
+    v-compiling? if
+      dup v-name>xt
+      swap v-name>immediate?
+        if v-,
+        else v-execute
+        then
+    else v-name>xt v-execute
+    then
+    exit
+  then
+  2dup find-name ?dup if
+    nip nip name>xt
+    \ deal with host XT
+    v-compiling?
+      if v-tried-compiling-host-word
+      else execute
+      then
+  else
+    \ maybe this is a number
+    2dup s>number? nip if
+      nip nip
+      v-compiling? if
+        [v-'] lit v-, v-,
+      then \ no else because the number is already on the stack
+    else
+      drop
+      v-unrecognized-word
+    then
+  then
+;
+
+0 make-variable >in
+TIB_BASE make-variable tib
+0 make-variable tib#
+
+variable v-source-fid
+
+: v-source ( -- c-addr u )
+  [v-'] tib v-execute v-@
+  [v-'] tib# v-execute v-@
+;
+: v-refill ( -- ? )
+  0 [v-'] >in v-execute v-! \ reset >IN
+  TIB_BASE dict[] TIB_CAPACITY v-source-fid @ ( c-addr u1 fid )
+  read-line throw ( u2 more? )
+  swap [v-'] tib# v-execute v-! \ write how much we read
+;
+
+: v-parse-area ( -- vc-addr u ) v-source [v-'] >in v-execute v-@ /string ;
+: v-parse-consume ( u -- ) [v-'] >in v-execute v-+! ;
+: v-parse ( c -- vc-addr u )
+  >r
+  v-parse-area over swap ( ret-addr vc-addr u )
+  begin dup \ parse until we see the delimiter or exhaust the string
+  while over v-c@ r@ <>
+  while 1 /string
+  repeat then ( ret-addr vc-addr u )
+  >r 2dup swap - swap r> ( ret-addr ret-u vc-addr u )
+  begin dup \ remove remaining trailing characters
+  while over v-c@ r@ =
+  while 1 /string
+  repeat then
+  r> 2drop \ we are done with the delimiter and remaining string length
+  rot tuck - v-parse-consume swap
+;
+: v-parse-name ( -- vc-addr u )
+  v-parse-area over swap ( vc-addr vc-addr u )
+  begin dup
+  while over v-c@ bl =
+  while 1 /string
+  repeat then
+  drop swap - v-parse-consume
+  bl v-parse
+;
+: vstr>str ( vc-addr u -- c-addr u ) swap dict[] swap ;
+
+: v-interpret ( -- )
+  begin
+    v-parse-name vstr>str
+    dup =0 if
+      2drop exit
+    then
+    v-evaluate
+  again
+;
+
+: v-bootstrap ( c-addr u -- )
+  r/o open-file throw v-source-fid ! \ open da file
+  begin v-refill
+  while v-interpret
+  repeat
+  v-source-fid @ close-file throw
+  0 v-source-fid !
+;
+
+s" src/scripts/bootstrap-forth.fth" v-bootstrap
+
 \ handwritten colon definitions currently look like this
 make-colon square
   v-' dup v-,
@@ -330,9 +464,9 @@ make-colon main
   v-' abort v-,
 v-' exit v-,
 
-v-' main DICT_START v-!
+v-' main DICT_BASE v-!
 
-3 v-' square v-execute .
+s" 3" v-evaluate s" square" v-evaluate .
 -1 v-' condtest v-execute .
 0 v-' condtest v-execute .
 

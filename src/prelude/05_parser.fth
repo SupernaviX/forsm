@@ -22,7 +22,7 @@ tib @ source0 source.buf !
 0 source0 source.id !
 0 source0 source.in !
 0 source0 source.name !
-0 source0 source.name !
+0 source0 source.name# !
 
 \ redefine tib and #tib to use this source record as source-of-truth
 source0 source.buf constant tib
