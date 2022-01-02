@@ -459,6 +459,9 @@ hex
 : i32.eq        ( -- )              46 compile-byte ;
 : i32.ne        ( -- )              47 compile-byte ;
 : i32.lt_s      ( -- )              48 compile-byte ;
+: i32.lt_u      ( -- )              49 compile-byte ;
+: i32.gt_s      ( -- )              4a compile-byte ;
+: i32.gt_u      ( -- )              4b compile-byte ;
 : i32.add       ( -- )              6a compile-byte ;
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;
@@ -466,6 +469,9 @@ hex
 : i32.and       ( -- )              71 compile-byte ;
 : i32.or        ( -- )              72 compile-byte ;
 : i32.xor       ( -- )              73 compile-byte ;
+: i32.shl       ( -- )              74 compile-byte ;
+: i32.shr_s     ( -- )              75 compile-byte ;
+: i32.shr_u     ( -- )              76 compile-byte ;
 decimal
 
 : elemsec: ( table -- )

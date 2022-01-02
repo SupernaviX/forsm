@@ -182,6 +182,14 @@ variable base host-deferred
 : ['] ( -- xt )
   ' lit lit , ,
 ; immediate
+: postpone ( -- )
+  parse-name find-name
+  dup =0 if -2 throw then
+  dup name>immediate?
+    if name>xt ,
+    else ['] lit , name>xt , ['] , ,
+    then
+; immediate
 : create parse-name header ;
 : variable ( -- ) create 0 , ;
 : constant ( val -- ) create (docon) xt, , ;

@@ -628,6 +628,8 @@ impl Compiler {
         );
         self.dovar = dovar;
         self.define_constant_word("(DOVAR)", dovar as i32);
+        self.define_constant_word("CELL", 4);
+        self.define_native_word("CELLS", vec![], vec![Call(pop), I32Const(2), I32Shl, Call(push)]);
         self.define_native_word("!", vec![], vec![Call(pop), Call(pop), I32Store(2, 0)]);
         self.define_native_word("@", vec![], vec![Call(pop), I32Load(2, 0), Call(push)]);
         self.define_native_word(

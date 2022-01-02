@@ -1,6 +1,4 @@
 : allot ( n -- )  cp +! ;
-4 constant cell
-: cells ( n -- n )  2* 2* ;
 
 \ given an address, return the next double-aligned address
 : daligned ( addr -- addr ) 7 + -8 and ;

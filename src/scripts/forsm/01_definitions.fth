@@ -8,9 +8,8 @@
 TIB_BASE make-variable tib
 0 make-variable tib#
 
-\ manually compile "HEADER" and sundry dependencies into the interpreter.
-\ Shame it has to be defined twice in this file,
-\ but we needed it to compile many other utils
+0 make-constant false
+-1 make-constant true
 4 make-constant cell
 (dovar) make-constant (dovar)
 (docon) make-constant (docon)
@@ -96,5 +95,10 @@ make-colon ;
   v-' exit v-lit v-xt ,
   v-xt reveal
   v-xt [
+v-xt exit
+v-immediate
+
+make-colon recurse
+  v-xt latest v-xt @ v-xt name>xt v-xt ,
 v-xt exit
 v-immediate

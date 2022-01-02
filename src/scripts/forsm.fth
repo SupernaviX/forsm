@@ -31,10 +31,12 @@ variable funcref#
 \ assembly utils
 : add ( n -- )  i32.const i32.add ;
 : sub ( n -- )  i32.const i32.sub ;
-: cell.load   ( offset -- ) 2 swap i32.load ;
-: cell.store  ( offset -- ) 2 swap i32.store ;
-: byte.load   ( offset -- ) 0 swap i32.load8_u ;
-: byte.store  ( offset -- ) 0 swap i32.store8 ;
+: cell.load     ( offset -- ) 2 swap i32.load ;
+: cell.store    ( offset -- ) 2 swap i32.store ;
+: byte.load     ( offset -- ) 0 swap i32.load8_u ;
+: byte.store    ( offset -- ) 0 swap i32.store8 ;
+: double.load   ( offset -- ) 2 swap i64.load ;
+: double.store  ( offset -- ) 2 swap i64.store ;
 
 \ given an XT, execute it
 type: {c-} constant callable-type
@@ -205,6 +207,14 @@ v-name>xt cell + constant >latest
   lit lit , ,
 ; immediate
 
+\ Get the address used to back a variable
+: v-body ( -- address )
+  v-' cell +
+;
+: [v-body]
+  v-body postpone literal
+; immediate
+
 \ the instruction pointer, (docol) and exit give us functions
 global: cmut DICT_BASE i32.const global; constant ip
 : ip@ ( -- ) ip global.get ;
@@ -242,7 +252,8 @@ func; is-start
 include ./forsm/01_definitions.fth
 include ./forsm/02_emulator.fth
 
-s" src/scripts/bootstrap-forth.fth" v-bootstrap
+s" ./bootstrap-forth.fth" v-bootstrap
+s" ../prelude/01_core.fth" v-bootstrap
 
 \ handwritten colon definitions currently look like this
 make-colon condtest

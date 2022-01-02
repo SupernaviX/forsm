@@ -6,6 +6,7 @@ variable v-rp
 v-r0 v-rp !
 : v->r ( value -- ) -4 v-rp +! v-rp @ ! ;
 : v-r> ( -- value ) v-rp @ @ 4 v-rp +! ;
+: v-r@ ( -- value ) v-rp @ @ ;
 : v-rdepth ( -- u ) v-r0 v-rp @ - 2/ 2/ ;
 
 : callable' ( -- callable )
@@ -38,6 +39,7 @@ v-r0 v-rp !
     cell v-ip +!  \ everything below this line just increments IP normally
     (dovar) of r@ cell + endof
     (docon) of r@ cell + v-@ endof
+    callable' execute of recurse endof
     callable' @ of v-@ endof
     callable' c@ of v-c@ endof
     callable' ! of v-! endof
@@ -47,10 +49,22 @@ v-r0 v-rp !
     callable' creset of v-creset endof
     callable' >r of v->r endof
     callable' r> of v-r> endof
+    callable' r@ of v-r@ endof
+    callable' r-depth of v-rdepth endof
     callable' dup of dup endof
+    callable' ?dup of ?dup endof
+    callable' 2dup of 2dup endof
     callable' drop of drop endof
     callable' 2drop of 2drop endof
     callable' swap of swap endof
+    callable' over of over endof
+    callable' tuck of tuck endof
+    callable' rot of rot endof
+    callable' -rot of -rot endof
+    callable' = of = endof
+    callable' <> of <> endof
+    callable' < of < endof
+    callable' > of < endof
     callable' =0 of =0 endof
     callable' <>0 of <>0 endof
     callable' + of + endof
@@ -156,18 +170,18 @@ variable host-words#
 variable v-source-fid
 
 : v-source ( -- c-addr u )
-  [v-'] tib v-execute v-@
-  [v-'] tib# v-execute v-@
+  [v-body] tib v-@
+  [v-body] tib# v-@
 ;
 : v-refill ( -- ? )
-  0 [v-'] >in v-execute v-! \ reset >IN
+  0 [v-body] >in v-! \ reset >IN
   TIB_BASE dict[] TIB_CAPACITY v-source-fid @ ( c-addr u1 fid )
   read-line throw ( u2 more? )
-  swap [v-'] tib# v-execute v-! \ write how much we read
+  swap [v-body] tib# v-! \ write how much we read
 ;
 
-: v-parse-area ( -- vc-addr u ) v-source [v-'] >in v-execute v-@ /string ;
-: v-parse-consume ( u -- ) [v-'] >in v-execute v-+! ;
+: v-parse-area ( -- vc-addr u ) v-source [v-body] >in v-@ /string ;
+: v-parse-consume ( u -- ) [v-body] >in v-+! ;
 : v-parse ( c -- vc-addr u )
   >r
   v-parse-area over swap ( ret-addr vc-addr u )
@@ -239,11 +253,25 @@ variable v-source-fid
   [v-'] hide v-execute
   [v-'] ] v-execute
 ;
+: v-postpone ( -- )
+  v-parse-name vstr>str
+  2dup v-find-name ?dup if
+    nip nip
+    dup v-name>immediate?
+      if v-name>xt v-,
+      else [v-'] lit v-, v-name>xt v-, [v-'] , v-,
+      then
+  else
+    ." Cannot postpone word " type cr
+    -19 throw
+  then
+;
 
 ' parse ' v-parse map-host-word
 ' parse-name ' v-parse-name map-host-word
 ' \ ' v-\ map-host-word
 ' ( ' v-( map-host-Word
+' postpone ' v-postpone map-host-word
 ' variable ' v-variable map-host-word
 ' constant ' v-constant map-host-word
 ' : ' v-: map-host-word
