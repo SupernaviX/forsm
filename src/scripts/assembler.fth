@@ -450,8 +450,10 @@ hex
 : global.set    ( u -- )            24 compile-byte compile-uint ;
 : i32.load      ( align offset -- ) 28 compile-byte swap compile-uint compile-uint ;
 : i64.load      ( align offset -- ) 29 compile-byte swap compile-uint compile-uint ;
+: i32.load8_u   ( align offset -- ) 2d compile-byte swap compile-uint compile-uint ;
 : i32.store     ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
 : i64.store     ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
+: i32.store8    ( align offset -- ) 3a compile-byte swap compile-uint compile-uint ;
 : i32.const     ( n -- )            41 compile-byte compile-sint ;
 : i32.eqz       ( -- )              45 compile-byte ;
 : i32.lt_s      ( -- )              48 compile-byte ;
@@ -459,6 +461,7 @@ hex
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;
 : i32.div_s     ( -- )              6d compile-byte ;
+: i32.and       ( -- )              71 compile-byte ;
 decimal
 
 : elemsec: ( table -- )

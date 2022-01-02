@@ -31,8 +31,10 @@ variable funcref#
 \ assembly utils
 : add ( n -- )  i32.const i32.add ;
 : sub ( n -- )  i32.const i32.sub ;
-: cell.load  ( offset -- ) 2 swap i32.load ;
-: cell.store ( offset -- ) 2 swap i32.store ;
+: cell.load   ( offset -- ) 2 swap i32.load ;
+: cell.store  ( offset -- ) 2 swap i32.store ;
+: byte.load   ( offset -- ) 0 swap i32.load8_u ;
+: byte.store  ( offset -- ) 0 swap i32.store8 ;
 
 \ given an XT, execute it
 type: {c-} constant callable-type
@@ -162,6 +164,11 @@ v-name>xt cell + constant >latest
   (dovar) v-,
   v-,
 ;
+: make-constant ( value -- )
+  parse-name v-header
+  (docon) v-,
+  v-,
+;
 : v-name= ( c-addr u v-c-addr u -- ? )
   rot over <> if
     drop 2drop false exit
@@ -245,10 +252,75 @@ func: {c-}
 next func; make-native abort
 
 func: {c-}
+  stack@ 0 local.tee
+  0 local.get
+  0 cell.load
+  0 cell.load
+  0 cell.store
+next func; make-native @
+
+func: {c-}
+  stack@ 0 local.tee
+  0 local.get
+  0 cell.load
+  0 byte.load
+  0 cell.store
+next func; make-native c@
+
+func: {c-}
+  stack@ 0 local.tee
+  0 cell.load \ address
+  0 local.get 4 cell.load \ value
+  0 cell.store
+  0 local.get 8 add stack!
+next func; make-native !
+
+func: {c-}
+  stack@ 0 local.tee
+  0 cell.load \ address
+  0 local.get 4 cell.load \ value
+  0 byte.store
+  0 local.get 8 add stack!
+next func; make-native c!
+
+func: {c-} locals c
+  stack@ 0 local.tee
+  0 cell.load 1 local.tee \ address
+  0 local.get 4 cell.load \ value
+  1 local.get 0 cell.load i32.add \ newvalue
+  0 cell.store
+  0 local.get 8 add stack!
+next func; make-native +!
+
+func: {c-}
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
 next func; make-native dup
+
+func: {c-}
+  stack@ 4 add stack!
+next func; make-native drop
+
+func: {c-}
+  stack@ 8 add stack!
+next func; make-native 2drop
+
+func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load
+  0 local.get
+  0 local.get 4 cell.load
+  0 cell.store 4 cell.store
+next func; make-native swap
+
+func: {c-}
+  (pop) call (rpush) call
+next func; make-native >r
+
+func: {c-}
+  (rpop) call (push) call
+next func; make-native r>
 
 func: {c-}
   (pop) call (pop) call
@@ -257,10 +329,28 @@ func: {c-}
 next func; make-native +
 
 func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load
+  1 add 0 cell.store
+next func; make-native 1+
+
+func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load
+  1 sub 0 cell.store
+next func; make-native 1-
+
+func: {c-}
   (pop) call (pop) call
   i32.mul
   (push) call
 next func; make-native *
+
+func: {c-}
+  (pop) call (pop) call
+  i32.and
+  (push) call
+next func; make-native and
 
 funcref# @ 0 +funcref-table
 
@@ -277,7 +367,7 @@ create v-rstack 256 allot
 here constant v-r0
 variable v-rp
 v-r0 v-rp !
-: v->r ( value -- ) -4 v-rp +! v-rp @ !  ;
+: v->r ( value -- ) -4 v-rp +! v-rp @ ! ;
 : v-r> ( -- value ) v-rp @ @ 4 v-rp +! ;
 : v-rdepth ( -- u ) v-r0 v-rp @ - 2/ 2/ ;
 
@@ -311,9 +401,22 @@ v-r0 v-rp !
     cell v-ip +!  \ everything below this line just increments IP normally
     (dovar) of r@ cell + endof
     (docon) of r@ cell + v-@ endof
+    callable' @ of v-@ endof
+    callable' c@ of v-c@ endof
+    callable' ! of v-! endof
+    callable' c! of v-c! endof
+    callable' +! of v-+! endof
+    callable' >r of v->r endof
+    callable' r> of v-r> endof
     callable' dup of dup endof
+    callable' drop of drop endof
+    callable' 2drop of 2drop endof
+    callable' swap of swap endof
     callable' + of + endof
+    callable' 1+ of 1+ endof
+    callable' 1- of 1- endof
     callable' * of * endof
+    callable' and of and endof
     ( default )
       ." Callable not supported: " dup . cr
       140 throw
@@ -326,6 +429,28 @@ v-r0 v-rp !
   begin v-rdepth \ if it was a colon definition,
   while v-ip @ v-@ v-execute' \ keep executing until it's done
   repeat
+;
+
+\ Support emulation of words provided by the host
+create host-words 16 2* cells allot
+variable host-words#
+0 host-words# !
+: map-host-word ( from-xt to-xt -- )
+  host-words# @ 2* cells host-words + tuck ( from-xt addr to-xt addr )
+  cell + ! !
+  1 host-words# +!
+;
+: host-execute ( xt -- ran? )
+  host-words# @ 0 ?do
+    i 2* cells host-words + ( xt mapping )
+    2dup @ = if
+      nip
+      cell + @ execute
+      true unloop exit
+    else drop
+    then
+  loop
+  false
 ;
 
 0 make-variable state
@@ -359,7 +484,11 @@ v-r0 v-rp !
     \ deal with host XT
     v-compiling?
       if v-tried-compiling-host-word
-      else execute
+      else
+        host-execute =0 if
+          ." Cannae execute host-word " cr
+          -18 throw
+        then
       then
   else
     \ maybe this is a number
@@ -438,6 +567,69 @@ variable v-source-fid
   v-source-fid @ close-file throw
   0 v-source-fid !
 ;
+
+\ manually compile "HEADER" and sundry dependencies into the interpreter.
+\ Shame it has to be defined twice in this file,
+\ but we needed it to compile many other utils
+4 make-constant cell
+(dovar) make-constant (dovar)
+(docon) make-constant (docon)
+
+make-colon here
+  v-' cp v-,
+  v-' @ v-,
+v-' exit v-,
+make-colon ,
+  v-' here v-, v-' ! v-,              \ here !
+  v-' cell v-, v-' cp v-, v-' +! v-,  \ cell cp +!
+v-' exit v-,
+
+make-colon c,
+  v-' here v-, v-' c! v-,                 \ here c!
+  v-' lit v-, 1 v-, v-' cp v-, v-' +! v-, \ 1 cp +!
+v-' exit v-,
+
+make-colon aligned
+  v-' lit v-, 3 v-, v-' + v-, v-' lit v-, -4 v-, v-' and v-,
+v-' exit v-,
+
+make-colon align
+  v-' here v-, v-' aligned v-, v-' cp v-, v-' ! v-,
+v-' exit v-,
+
+make-colon header
+  v-' here v-, v-' >r v-, \ here >r
+  v-' dup v-, v-' c, v-,  \ dup c,
+  v-here \ start of loop ( holding this address on the stack )
+    v-' dup v-, v-' ?branch v-, v-here 0 v-, \ dup ?branch [after loop]
+    v-' swap v-, v-' dup v-, v-' c@ v-, ( v-' upchar v-, ) v-' c, v-, \ swap dup c@ upchar c,
+    v-' 1+ v-, v-' swap v-, v-' 1- v-, \ 1+ swap 1-
+    v-' branch v-, swap v-, \ branch [start of loop]
+  v-here swap v-! \ end of loop
+  v-' 2drop v-, v-' align v-, \ 2drop align
+  v-' latest v-, v-' @ v-, v-' , v-, \ latest @ ,
+  v-' r> v-, v-' latest v-, v-' ! v-,  \ r> latest !
+  v-' (dovar) v-, v-' , v-, \ (dovar) ,
+v-' exit v-,
+
+\ support calling some debugging utils in the emulator
+: v-type ( vc-addr u -- ) vstr>str type ;
+
+' . ' . map-host-word
+' cr ' cr map-host-word
+' type ' v-type map-host-word
+' .s ' .s map-host-word
+
+\ compilation functions
+: v-\ ( -- ) -1 v-parse 2drop ;
+: v-( ( -- ) [char] ) v-parse 2drop ;
+: v-variable ( -- ) v-parse-name [v-'] header v-execute 0 v-, ;
+
+' parse ' v-parse map-host-word
+' parse-name ' v-parse-name map-host-word
+' \ ' v-\ map-host-word
+' ( ' v-( map-host-Word
+' variable ' v-variable map-host-word
 
 s" src/scripts/bootstrap-forth.fth" v-bootstrap
 
