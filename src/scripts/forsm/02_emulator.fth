@@ -249,17 +249,20 @@ variable v-source-fid
 \ compilation functions
 : v-\ ( -- ) -1 v-parse 2drop ;
 : v-( ( -- ) [char] ) v-parse 2drop ;
-: v-variable ( -- )
+: v-create ( -- )
   v-parse-name [v-'] header v-execute
+;
+: v-variable ( -- )
+  v-create
   0 v-,
 ;
 : v-constant ( value -- )
-  v-parse-name [v-'] header v-execute
+  v-create
   [v-'] (docon) v-execute [v-'] xt, v-execute
   v-,
 ;
 : v-: ( -- )
-  v-parse-name [v-'] header v-execute
+  v-create
   [v-'] (docol) v-execute [v-'] xt, v-execute
   [v-'] hide v-execute
   [v-'] ] v-execute
@@ -283,6 +286,7 @@ variable v-source-fid
 ' \ ' v-\ map-host-word
 ' ( ' v-( map-host-Word
 ' postpone ' v-postpone map-host-word
+' create ' v-create map-host-word
 ' variable ' v-variable map-host-word
 ' constant ' v-constant map-host-word
 ' : ' v-: map-host-word

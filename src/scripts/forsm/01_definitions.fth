@@ -98,6 +98,11 @@ make-colon ;
 v-xt exit
 v-immediate
 
+make-colon literal
+  v-' lit v-lit v-xt ,
+v-xt exit
+v-immediate
+
 make-colon recurse
   v-xt latest v-xt @ v-xt name>xt v-xt ,
 v-xt exit

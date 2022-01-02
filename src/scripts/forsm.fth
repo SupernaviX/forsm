@@ -76,7 +76,7 @@ func: {-c} locals c
 func; constant (rpop)
 
 \ TODO: this dict should grow as needed
-hex 2000 decimal constant DICT_SIZE
+hex 3000 decimal constant DICT_SIZE
 0 datasec: TIB_BASE i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
 : dict[] ( u -- u ) TIB_BASE - dictbuf buf[] ;
@@ -256,6 +256,7 @@ include ./forsm/02_emulator.fth
 s" ./bootstrap-forth.fth" v-bootstrap
 s" ../prelude/01_core.fth" v-bootstrap
 s" ../prelude/02_memory.fth" v-bootstrap
+s" ../prelude/03_strings.fth" v-bootstrap
 
 \ handwritten colon definitions currently look like this
 make-colon condtest
