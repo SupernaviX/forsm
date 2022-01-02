@@ -7,6 +7,7 @@ hex
 0100 constant DICT_BASE \ The dictionary. The cell AT this address is main.
 ed00 constant PARAM_STACK_BASE \ the HIGHEST address in the param stack (stacks grow down)
 f100 constant RETURN_STACK_BASE \ likewise for the return stack
+f100 constant HEAP_BASE \ so it's safe for HEAP_BASE to start at the same addr as the return stack
 decimal
 
 DICT_BASE TIB_BASE - constant TIB_CAPACITY
@@ -75,7 +76,7 @@ func: {-c} locals c
 func; constant (rpop)
 
 \ TODO: this dict should grow as needed
-hex 1000 decimal constant DICT_SIZE
+hex 2000 decimal constant DICT_SIZE
 0 datasec: TIB_BASE i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
 : dict[] ( u -- u ) TIB_BASE - dictbuf buf[] ;
@@ -254,6 +255,7 @@ include ./forsm/02_emulator.fth
 
 s" ./bootstrap-forth.fth" v-bootstrap
 s" ../prelude/01_core.fth" v-bootstrap
+s" ../prelude/02_memory.fth" v-bootstrap
 
 \ handwritten colon definitions currently look like this
 make-colon condtest

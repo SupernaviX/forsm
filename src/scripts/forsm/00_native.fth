@@ -71,6 +71,14 @@ func: {c-} locals c
 next func; make-native +!
 
 func: {c-}
+  memory.size (push) call
+next func; make-native memory.size
+func: {c-}
+  (pop) call memory.grow (push) call
+next func; make-native memory.grow
+HEAP_BASE make-constant heap-base
+
+func: {c-}
   stack@ 4 sub 0 local.tee
   0 local.get 4 cell.load 0 cell.store
   0 local.get stack!
@@ -108,11 +116,33 @@ func: {c-}
 next func; make-native swap
 
 func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 double.load
+  0 local.get
+  0 local.get 8 double.load
+  0 double.store 8 double.store
+next func; make-native 2swap
+
+func: {c-}
   stack@ 4 sub 0 local.tee
   0 local.get 8 cell.load
   0 cell.store
   0 local.get stack!
 next func; make-native over
+
+func: {c-}
+  stack@ 8 sub 0 local.tee
+  0 local.get 16 double.load
+  0 double.store
+  0 local.get stack!
+next func; make-native 2over
+
+func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load \ retrieve value of head
+  4 cell.store  \ store in head + 4
+  0 local.get 4 add stack!
+next func; make-native nip
 
 func: {c-} locals c
   stack@ 4 sub 0 local.tee \ save head - 4
@@ -162,71 +192,77 @@ func: {c-}
   (push) call
 next func; make-native r-depth
 
-func: {c-}
+: i32-comparator-start ( -- )
   stack@ 0 local.tee
   0 i32.const
   0 local.get 4 cell.load
   0 local.get 0 cell.load
-  i32.eq
+;
+: i32-comparator-done ( -- )
   i32.sub
   4 cell.store
   0 local.get 4 add stack!
+;
+
+func: {c-}
+  i32-comparator-start
+  i32.eq
+  i32-comparator-done
 next func; make-native =
 
 func: {c-}
-  stack@ 0 local.tee
-  0 i32.const
-  0 local.get 4 cell.load
-  0 local.get 0 cell.load
+  i32-comparator-start
   i32.ne
-  i32.sub
-  4 cell.store
-  0 local.get 4 add stack!
+  i32-comparator-done
 next func; make-native <>
 
 func: {c-}
-  stack@ 0 local.tee
-  0 i32.const
-  0 local.get 4 cell.load
-  0 local.get 0 cell.load
+  i32-comparator-start
   i32.lt_s
-  i32.sub
-  4 cell.store
-  0 local.get 4 add stack!
+  i32-comparator-done
 next func; make-native <
 
 func: {c-}
-  stack@ 0 local.tee
-  0 i32.const
-  0 local.get 4 cell.load
-  0 local.get 0 cell.load
+  i32-comparator-start
   i32.lt_u
-  i32.sub
-  4 cell.store
-  0 local.get 4 add stack!
+  i32-comparator-done
 next func; make-native u<
 
 func: {c-}
-  stack@ 0 local.tee
-  0 i32.const
-  0 local.get 4 cell.load
-  0 local.get 0 cell.load
+  i32-comparator-start
+  i32.le_s
+  i32-comparator-done
+next func; make-native <=
+
+func: {c-}
+  i32-comparator-start
+  i32.le_u
+  i32-comparator-done
+next func; make-native u<=
+
+func: {c-}
+  i32-comparator-start
   i32.gt_s
-  i32.sub
-  4 cell.store
-  0 local.get 4 add stack!
+  i32-comparator-done
 next func; make-native >
 
 func: {c-}
-  stack@ 0 local.tee
-  0 i32.const
-  0 local.get 4 cell.load
-  0 local.get 0 cell.load
+  i32-comparator-start
   i32.gt_u
-  i32.sub
-  4 cell.store
-  0 local.get 4 add stack!
+  i32-comparator-done
 next func; make-native u>
+
+func: {c-}
+  i32-comparator-start
+  i32.ge_s
+  i32-comparator-done
+next func; make-native >=
+
+func: {c-}
+  i32-comparator-start
+  i32.ge_u
+  i32-comparator-done
+next func; make-native u>=
 
 func: {c-}
   stack@ 0 local.tee
@@ -247,15 +283,43 @@ func: {c-}
 next func; make-native <>0
 
 func: {c-}
-  (pop) call (pop) call
+  stack@ 0 local.tee
+  0 i32.const
+  0 local.get 0 cell.load
+  0 i32.const i32.lt_s
+  i32.sub
+  0 cell.store
+next func; make-native <0
+
+func: {c-}
+  stack@ 0 local.tee
+  0 i32.const
+  0 local.get 0 cell.load
+  0 i32.const i32.gt_s
+  i32.sub
+  0 cell.store
+next func; make-native >0
+
+: i32-binary-start ( -- )
+  stack@ 0 local.tee
+  0 local.get 4 cell.load
+  0 local.get 0 cell.load
+;
+: i32-binary-done ( -- )
+  4 cell.store
+  0 local.get 4 add stack!
+;
+
+func: {c-}
+  i32-binary-start
   i32.add
-  (push) call
+  i32-binary-done
 next func; make-native +
 
 func: {c-}
-  (pop) call (pop) call
+  i32-binary-start
   i32.sub
-  (push) call
+  i32-binary-done
 next func; make-native -
 
 func: {c-}
@@ -271,16 +335,44 @@ func: {c-}
 next func; make-native 1-
 
 func: {c-}
-  (pop) call (pop) call
+  i32-binary-start
   i32.mul
-  (push) call
+  i32-binary-done
 next func; make-native *
 
-func: {c-}
-  (pop) call (pop) call
-  i32.and
+func: {c-} locals c
+  (pop) call 0 local.tee
+  (pop) call 1 local.tee
+  0 local.get 1 local.get
+  i32.lt_s select
   (push) call
+next func; make-native min
+
+func: {c-} locals c
+  (pop) call 0 local.tee
+  (pop) call 1 local.tee
+  0 local.get 1 local.get
+  i32.gt_s select
+  (push) call
+next func; make-native max
+
+func: {c-}
+  i32-binary-start
+  i32.and
+  i32-binary-done
 next func; make-native and
+
+func: {c-}
+  i32-binary-start
+  i32.shl
+  i32-binary-done
+next func; make-native lshift
+
+func: {c-}
+  i32-binary-start
+  i32.shr_u
+  i32-binary-done
+next func; make-native rshift
 
 func: {c-}
   (pop) call 0 local.tee

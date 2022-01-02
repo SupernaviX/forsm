@@ -443,6 +443,7 @@ hex
 : br            ( label -- )        0c compile-byte compile-uint ;
 : call          ( func -- )         10 compile-byte compile-uint ;
 : call_indirect ( type -- )         11 compile-byte compile-uint 0 compile-byte ;
+: select        ( -- )              1b compile-byte ;
 : local.get     ( u -- )            20 compile-byte compile-uint ;
 : local.set     ( u -- )            21 compile-byte compile-uint ;
 : local.tee     ( u -- )            22 compile-byte compile-uint ;
@@ -454,6 +455,8 @@ hex
 : i32.store     ( align offset -- ) 36 compile-byte swap compile-uint compile-uint ;
 : i64.store     ( align offset -- ) 37 compile-byte swap compile-uint compile-uint ;
 : i32.store8    ( align offset -- ) 3a compile-byte swap compile-uint compile-uint ;
+: memory.size   ( -- )              3f compile-byte 0 compile-byte ;
+: memory.grow   ( -- )              40 compile-byte 0 compile-byte ;
 : i32.const     ( n -- )            41 compile-byte compile-sint ;
 : i32.eqz       ( -- )              45 compile-byte ;
 : i32.eq        ( -- )              46 compile-byte ;
@@ -462,6 +465,10 @@ hex
 : i32.lt_u      ( -- )              49 compile-byte ;
 : i32.gt_s      ( -- )              4a compile-byte ;
 : i32.gt_u      ( -- )              4b compile-byte ;
+: i32.le_s      ( -- )              4c compile-byte ;
+: i32.le_u      ( -- )              4d compile-byte ;
+: i32.ge_s      ( -- )              4e compile-byte ;
+: i32.ge_u      ( -- )              4f compile-byte ;
 : i32.add       ( -- )              6a compile-byte ;
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;

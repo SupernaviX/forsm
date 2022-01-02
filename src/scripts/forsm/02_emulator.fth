@@ -57,16 +57,27 @@ v-r0 v-rp !
     callable' drop of drop endof
     callable' 2drop of 2drop endof
     callable' swap of swap endof
+    callable' 2swap of 2swap endof
     callable' over of over endof
+    callable' 2over of 2over endof
+    callable' nip of nip endof
     callable' tuck of tuck endof
     callable' rot of rot endof
     callable' -rot of -rot endof
     callable' = of = endof
     callable' <> of <> endof
     callable' < of < endof
-    callable' > of < endof
+    callable' u< of u< endof
+    callable' <= of <= endof
+    callable' u<= of u<= endof
+    callable' > of > endof
+    callable' u> of u> endof
+    callable' >= of >= endof
+    callable' u>= of u>= endof
     callable' =0 of =0 endof
     callable' <>0 of <>0 endof
+    callable' min of min endof
+    callable' max of max endof
     callable' + of + endof
     callable' 1+ of 1+ endof
     callable' 1- of 1- endof
