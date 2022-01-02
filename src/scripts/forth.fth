@@ -85,10 +85,12 @@ DICT_SIZE dictbuf init-to-zero
 : v-+! ( n u -- ) dict[] +! ;
 : v-c@ ( u -- c ) dict[] c@ ;
 : v-c! ( c u -- ) dict[] c! ;
-: v-name>xt ( v-nt -- v-xt )
-  dup v-c@ 1+ aligned + cell +
-;
+: v-cset ( c u -- ) dict[] cset ;
+: v-creset ( c u -- ) dict[] creset ;
 : v-name>u ( v-nt -- u ) v-c@ 31 and ;
+: v-name>xt ( v-nt -- v-xt )
+  dup v-name>u 1+ aligned + cell +
+;
 : v-name>string ( v-nt -- vc-addr u ) dup 1+ swap v-name>u ;
 : v-name>backword ( v-nt -- v-nt ) dup v-name>u 1+ + aligned v-@ ;
 : v-name>immediate? ( v-nt -- ? ) v-c@ 64 and <>0 ;
@@ -323,10 +325,34 @@ func: {c-}
 next func; make-native r>
 
 func: {c-}
+  stack@ 0 local.tee
+  0 i32.const
+  0 local.get 0 cell.load
+  i32.eqz
+  i32.sub
+  0 cell.store
+next func; make-native =0
+
+func: {c-}
+  stack@ 0 local.tee
+  0 i32.const
+  0 local.get 0 cell.load
+  0 i32.const i32.ne
+  i32.sub
+  0 cell.store
+next func; make-native <>0
+
+func: {c-}
   (pop) call (pop) call
   i32.add
   (push) call
 next func; make-native +
+
+func: {c-}
+  (pop) call (pop) call
+  i32.sub
+  (push) call
+next func; make-native -
 
 func: {c-}
   stack@ 0 local.tee
@@ -351,6 +377,20 @@ func: {c-}
   i32.and
   (push) call
 next func; make-native and
+
+func: {c-}
+  (pop) call 0 local.tee
+  0 local.get 0 cell.load
+  (pop) call i32.or
+  0 cell.store
+next func; make-native cset
+
+func: {c-}
+  (pop) call 0 local.tee
+  0 local.get 0 cell.load
+  (pop) call -1 i32.const i32.xor i32.and
+  0 cell.store
+next func; make-native creset
 
 funcref# @ 0 +funcref-table
 
@@ -412,11 +452,15 @@ v-r0 v-rp !
     callable' drop of drop endof
     callable' 2drop of 2drop endof
     callable' swap of swap endof
+    callable' =0 of =0 endof
+    callable' <>0 of <>0 endof
     callable' + of + endof
     callable' 1+ of 1+ endof
     callable' 1- of 1- endof
     callable' * of * endof
     callable' and of and endof
+    callable' cset of v-cset endof
+    callable' creset of v-creset endof
     ( default )
       ." Callable not supported: " dup . cr
       140 throw
@@ -463,6 +507,10 @@ variable host-words#
   ." Cannot compile host word: " type cr
   -15 throw
 ;
+: v-cannot-execute-host-word ( c-addr u -- )
+  ." Cannot execute host word: " type cr
+  -16 throw
+;
 
 \ Given a string, evaluate it through the firtual interpreter
 : v-evaluate ( c-addr u -- )
@@ -472,24 +520,29 @@ variable host-words#
     v-compiling? if
       dup v-name>xt
       swap v-name>immediate?
-        if v-,
-        else v-execute
+        if v-execute
+        else v-,
         then
     else v-name>xt v-execute
     then
     exit
   then
   2dup find-name ?dup if
-    nip nip name>xt
     \ deal with host XT
-    v-compiling?
-      if v-tried-compiling-host-word
-      else
-        host-execute =0 if
-          ." Cannae execute host-word " cr
-          -18 throw
-        then
+    v-compiling? if
+      dup name>immediate? if
+        -rot 2>r name>xt host-execute
+          if 2r> 2drop
+          else 2r> v-cannot-execute-host-word
+          then
+      else drop v-tried-compiling-host-word
       then
+    else
+      -rot 2>r name>xt host-execute
+        if 2r> 2drop
+        else 2r> v-cannot-execute-host-word
+        then
+    then
   else
     \ maybe this is a number
     2dup s>number? nip if
@@ -574,6 +627,7 @@ variable v-source-fid
 4 make-constant cell
 (dovar) make-constant (dovar)
 (docon) make-constant (docon)
+(docol) make-constant (docol)
 
 make-colon here
   v-' cp v-,
@@ -616,9 +670,47 @@ make-colon name>xt
   v-' dup v-, v-' c@ v-, v-' 1+ v-, v-' aligned v-, v-' + v-, v-' cell v-, v-' + v-,
 v-' exit v-,
 
+make-colon name>immediate?
+  v-' c@ v-, v-' lit v-, 64 v-, v-' and v-, v-' <>0 v-,
+v-' exit v-,
+
 make-colon xt,
   v-' latest v-, v-' @ v-, v-' name>xt v-, v-' ! v-,
 v-' exit v-,
+
+make-colon immediate
+  v-' lit v-, 64 v-,
+  v-' latest v-, v-' @ v-,
+  v-' cset v-,
+v-' exit v-,
+
+make-colon hide
+  v-' lit v-, 32768 v-,
+  v-' latest v-, v-' @ v-,
+  v-' cset v-,
+v-' exit v-,
+
+make-colon reveal
+  v-' lit v-, 32768 v-,
+  v-' latest v-, v-' @ v-,
+  v-' creset v-,
+v-' exit v-,
+
+make-colon [
+  v-' lit v-, 0 v-, v-' state v-, v-' ! v-,
+v-' exit v-,
+v-' immediate v-execute
+
+make-colon ]
+  v-' lit v-, -1 v-, v-' state v-, v-' ! v-,
+v-' exit v-,
+
+make-colon ;
+  v-' lit v-, v-' exit v-, v-' , v-,
+  v-' reveal v-,
+  v-' [ v-,
+v-' exit v-,
+v-' immediate v-execute
 
 \ support calling some debugging utils in the emulator
 : v-type ( vc-addr u -- ) vstr>str type ;
@@ -640,6 +732,12 @@ v-' exit v-,
   [v-'] (docon) v-execute [v-'] xt, v-execute
   v-,
 ;
+: v-: ( -- )
+  v-parse-name [v-'] header v-execute
+  [v-'] (docol) v-execute [v-'] xt, v-execute
+  [v-'] hide v-execute
+  [v-'] ] v-execute
+;
 
 ' parse ' v-parse map-host-word
 ' parse-name ' v-parse-name map-host-word
@@ -647,15 +745,11 @@ v-' exit v-,
 ' ( ' v-( map-host-Word
 ' variable ' v-variable map-host-word
 ' constant ' v-constant map-host-word
+' : ' v-: map-host-word
 
 s" src/scripts/bootstrap-forth.fth" v-bootstrap
 
 \ handwritten colon definitions currently look like this
-make-colon square
-  v-' dup v-,
-  v-' * v-,
-v-' exit v-,
-
 make-colon condtest
   v-' ?branch v-, v-here 0 v-,
     v-' lit v-, 5 v-,

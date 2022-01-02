@@ -456,12 +456,16 @@ hex
 : i32.store8    ( align offset -- ) 3a compile-byte swap compile-uint compile-uint ;
 : i32.const     ( n -- )            41 compile-byte compile-sint ;
 : i32.eqz       ( -- )              45 compile-byte ;
+: i32.eq        ( -- )              46 compile-byte ;
+: i32.ne        ( -- )              47 compile-byte ;
 : i32.lt_s      ( -- )              48 compile-byte ;
 : i32.add       ( -- )              6a compile-byte ;
 : i32.sub       ( -- )              6b compile-byte ;
 : i32.mul       ( -- )              6c compile-byte ;
 : i32.div_s     ( -- )              6d compile-byte ;
 : i32.and       ( -- )              71 compile-byte ;
+: i32.or        ( -- )              72 compile-byte ;
+: i32.xor       ( -- )              73 compile-byte ;
 decimal
 
 : elemsec: ( table -- )
