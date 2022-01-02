@@ -612,6 +612,14 @@ make-colon header
   v-' (dovar) v-, v-' , v-, \ (dovar) ,
 v-' exit v-,
 
+make-colon name>xt
+  v-' dup v-, v-' c@ v-, v-' 1+ v-, v-' aligned v-, v-' + v-, v-' cell v-, v-' + v-,
+v-' exit v-,
+
+make-colon xt,
+  v-' latest v-, v-' @ v-, v-' name>xt v-, v-' ! v-,
+v-' exit v-,
+
 \ support calling some debugging utils in the emulator
 : v-type ( vc-addr u -- ) vstr>str type ;
 
@@ -623,13 +631,22 @@ v-' exit v-,
 \ compilation functions
 : v-\ ( -- ) -1 v-parse 2drop ;
 : v-( ( -- ) [char] ) v-parse 2drop ;
-: v-variable ( -- ) v-parse-name [v-'] header v-execute 0 v-, ;
+: v-variable ( -- )
+  v-parse-name [v-'] header v-execute
+  0 v-,
+;
+: v-constant ( value -- )
+  v-parse-name [v-'] header v-execute
+  [v-'] (docon) v-execute [v-'] xt, v-execute
+  v-,
+;
 
 ' parse ' v-parse map-host-word
 ' parse-name ' v-parse-name map-host-word
 ' \ ' v-\ map-host-word
 ' ( ' v-( map-host-Word
 ' variable ' v-variable map-host-word
+' constant ' v-constant map-host-word
 
 s" src/scripts/bootstrap-forth.fth" v-bootstrap
 
