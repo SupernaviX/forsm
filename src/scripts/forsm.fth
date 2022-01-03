@@ -75,21 +75,59 @@ func: {-c} locals c
   0 local.get 4 add rp!
 func; constant (rpop)
 
-\ TODO: this dict should grow as needed
-hex 3000 decimal constant DICT_SIZE
-0 datasec: TIB_BASE i32.const datasec;
+: grow-if-needed ( target buf -- )
+  tuck buf.len @ - cell + dup >0
+    if 0 swap rot push-byte-repeating
+    else 2drop
+    then
+;
+
+\ in-memory data section for the emulated TIB
+create v-tib TIB_CAPACITY allot
+: tib[] ( u -- u )
+  TIB_BASE - v-tib +
+;
+
+\ data section for the dictionary
+0 datasec: DICT_BASE i32.const datasec;
 : dictbuf ( -- buf ) literal databuf[] ;
-: dict[] ( u -- u ) TIB_BASE - dictbuf buf[] ;
-DICT_SIZE dictbuf init-to-zero
+: dict[] ( u -- u )
+  DICT_BASE -
+  dup dictbuf grow-if-needed
+  dictbuf buf[]
+;
+
+\ data section for the heap
+0 datasec: HEAP_BASE i32.const datasec;
+: heapbuf ( -- buf ) literal databuf[] ;
+: heap[] ( u -- u )
+  HEAP_BASE -
+  dup heapbuf grow-if-needed
+  heapbuf buf[]
+;
+
+: vaddr>addr ( u -- u )
+  dup HEAP_BASE >= if
+    heap[] exit
+  then
+  dup DICT_BASE >= if
+    dict[] exit
+  then
+  dup TIB_BASE >= if
+    tib[] exit
+  then
+  ." Cannae write to wee memory address " . cr
+  -20 throw
+;
 
 \ Utilities for manually constructing the data dictionary
-: v-@ ( u -- n ) dict[] @ ;
-: v-! ( n u -- ) dict[] ! ;
-: v-+! ( n u -- ) dict[] +! ;
-: v-c@ ( u -- c ) dict[] c@ ;
-: v-c! ( c u -- ) dict[] c! ;
-: v-cset ( c u -- ) dict[] cset ;
-: v-creset ( c u -- ) dict[] creset ;
+: v-@ ( u -- n ) vaddr>addr @ ;
+: v-! ( n u -- ) vaddr>addr ! ;
+: v-+! ( n u -- ) vaddr>addr +! ;
+: v-c@ ( u -- c ) vaddr>addr c@ ;
+: v-c! ( c u -- ) vaddr>addr c! ;
+: v-cset ( c u -- ) vaddr>addr cset ;
+: v-creset ( c u -- ) vaddr>addr creset ;
 : v-name>u ( v-nt -- u ) v-c@ 31 and ;
 : v-name>xt ( v-nt -- v-xt )
   dup v-name>u 1+ aligned + cell +

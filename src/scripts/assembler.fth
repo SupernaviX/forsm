@@ -83,6 +83,10 @@ end-struct |buf|
   over swap reserve-space
   swap cmove
 ;
+: push-byte-repeating ( c u buf -- )
+  over swap reserve-space
+  swap rot fill
+;
 : init-to-zero ( size buf -- )
   tuck buf.len @ - over reserve-space drop
   dup buf.data @ swap buf.len @ 0 fill

@@ -186,7 +186,7 @@ variable v-source-fid
 ;
 : v-refill ( -- ? )
   0 [v-body] >in v-! \ reset >IN
-  TIB_BASE dict[] TIB_CAPACITY v-source-fid @ ( c-addr u1 fid )
+  TIB_BASE vaddr>addr TIB_CAPACITY v-source-fid @ ( c-addr u1 fid )
   read-line throw ( u2 more? )
   swap [v-body] tib# v-! \ write how much we read
 ;
@@ -217,7 +217,7 @@ variable v-source-fid
   drop swap - v-parse-consume
   bl v-parse
 ;
-: vstr>str ( vc-addr u -- c-addr u ) swap dict[] swap ;
+: vstr>str ( vc-addr u -- c-addr u ) swap vaddr>addr swap ;
 
 : v-interpret ( -- )
   begin
