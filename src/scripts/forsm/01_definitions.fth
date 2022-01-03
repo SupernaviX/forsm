@@ -37,12 +37,20 @@ make-colon align
   v-xt here v-xt aligned v-xt cp v-xt !
 v-xt exit
 
+make-colon upchar
+  v-xt dup char a v-lit v-xt >=
+  v-xt over char z v-lit v-xt <= v-xt and
+  v-xt ?branch v-here 0 v-, \ if
+  32 v-lit v-xt -
+  v-here swap v-! \ then
+v-xt exit
+
 make-colon header
   v-xt here v-xt >r \ here >r
   v-xt dup v-xt c,  \ dup c,
   v-here \ start of loop ( holding this address on the stack )
     v-xt dup v-xt ?branch v-here 0 v-,  \ dup ?branch [after loop]
-    v-xt swap v-xt dup v-xt c@ ( v-xt upchar ) v-xt c, \ swap dup c@ upchar c,
+    v-xt swap v-xt dup v-xt c@ v-xt upchar v-xt c, \ swap dup c@ upchar c,
     v-xt 1+ v-xt swap v-xt 1- \ 1+ swap 1-
     v-xt branch swap v-, \ branch [start of loop]
   v-here swap v-! \ end of loop

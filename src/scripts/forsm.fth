@@ -189,7 +189,7 @@ v-name>xt cell + constant >latest
   v-here >r
   dup v-c,
   begin ?dup
-  while over c@ v-c, 1 /string
+  while over c@ upchar v-c, 1 /string
   repeat drop
   >cp v-@ aligned >cp v-!
   >latest v-@ v-,

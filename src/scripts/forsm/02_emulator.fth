@@ -79,6 +79,7 @@ v-r0 v-rp !
     callable' min of min endof
     callable' max of max endof
     callable' + of + endof
+    callable' - of - endof
     callable' 1+ of 1+ endof
     callable' 1- of 1- endof
     callable' * of * endof
@@ -243,6 +244,7 @@ variable v-source-fid
 
 ' . ' . map-host-word
 ' cr ' cr map-host-word
+' emit ' emit map-host-word
 ' type ' v-type map-host-word
 ' .s ' .s map-host-word
 
