@@ -110,9 +110,6 @@ create iovec 2 cells allot
     then
 ;
 
-
-4 constant init-dir-fd
-
 \ options bitmask
 1 constant fd-allow-read
 2 constant fd-allow-write

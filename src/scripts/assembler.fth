@@ -372,7 +372,7 @@ decimal
     then
 ;
 
-: +wasi-import ( c-addr u type -- )
+: +wasi-import ( c-addr u type -- index )
   current-program @ program.import >r
   compile-start
     s" wasi_snapshot_preview1" compile-string
@@ -381,10 +381,10 @@ decimal
     compile-uint        \ encode the function signature
   compile-stop
   r@ push-bytes
-  r> vec-add-entry drop
+  r> vec-add-entry
 ;
 
-: wasi-import: ( -- )
+: wasi-import: ( -- index )
   parse-name 
   parse-name +type
   +wasi-import
@@ -462,6 +462,7 @@ hex
 : memory.size   ( -- )              3f compile-byte 0 compile-byte ;
 : memory.grow   ( -- )              40 compile-byte 0 compile-byte ;
 : i32.const     ( n -- )            41 compile-byte compile-sint ;
+: i64.const     ( n -- )            42 compile-byte compile-sint ;
 : i32.eqz       ( -- )              45 compile-byte ;
 : i32.eq        ( -- )              46 compile-byte ;
 : i32.ne        ( -- )              47 compile-byte ;
@@ -483,6 +484,7 @@ hex
 : i32.shl       ( -- )              74 compile-byte ;
 : i32.shr_s     ( -- )              75 compile-byte ;
 : i32.shr_u     ( -- )              76 compile-byte ;
+: i64.rotl      ( -- )              89 compile-byte ;
 decimal
 
 : elemsec: ( table -- )

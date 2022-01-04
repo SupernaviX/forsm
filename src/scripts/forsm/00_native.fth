@@ -1,3 +1,47 @@
+create parambuf 16 allot
+: param[] ( i -- c ) parambuf + c@ ;
+variable param#
+: param-size ( c -- u )
+  [char] d =
+    if 2 cells
+    else cell
+    then
+;
+: params-size ( -- u )
+  0
+  param# @ 0 ?do
+    i param[] param-size +
+  loop
+;
+
+\ looks like "ccddc"
+: parse-ffi-signature ( c-addr u -- )
+  dup param# !
+  parambuf swap move
+;
+
+: ffi-start ( -- ffi-sys )
+  parse-name parse-ffi-signature
+  params-size dup ( size size )
+  stack@ 0 local.tee \ compiled: store the stack pointer in a local register
+  param# @ 0 do
+    i param[] [char] d = if
+      2 cells - \ displace by the size of a double
+      0 local.get dup double.load \ compiled: fetch a double
+    else
+      cell - \ displace by the size of a cell
+      0 local.get dup cell.load \ compiled: fetch a cell
+    then
+  loop
+  drop
+;
+
+: ffi-done ( ffi-sys -- )
+  cell - \ displace by the size of a cell
+  dup cell.store \ compiled: store the result
+  0 local.get add stack! \ compiled: move the stack pointer
+;
+
 \ literals are stored inline so they require messing with the IP
 func: {c-}
   ip@ 0 local.tee
@@ -26,8 +70,62 @@ next func; make-native execute
 \ exit with some status code
 \ for now, the exit code is the only functioning output
 func: {c-}
-  (pop) call 0 call
+  (pop) call (proc-exit) call
 next func; make-native abort
+
+func: {c-}
+  ffi-start cc
+  (args-get) call
+  ffi-done
+next func; make-native args-get
+
+func: {c-}
+  ffi-start cc
+  (args-sizes-get) call
+  ffi-done
+next func; make-native args-sizes-get
+
+func: {c-}
+  ffi-start cccc
+  (fd-read) call
+  ffi-done
+next func; make-native fd-read
+
+func: {c-}
+  ffi-start cccc
+  (fd-write) call
+  ffi-done
+next func; make-native fd-write
+
+func: {c-}
+  ffi-start cccccddcc
+  (path-open) call
+  ffi-done
+next func; make-native path-open
+
+func: {c-}
+  ffi-start c
+  (fd-close) call
+  ffi-done
+next func; make-native fd-close
+
+func: {c-}
+  ffi-start cc
+  (fd-prestat-get) call
+  ffi-done
+next func; make-native fd-prestat-get
+
+func: {c-}
+  ffi-start ccc
+  (fd-prestat-dir-name) call
+  ffi-done
+next func; make-native fd-prestat-dir-name
+
+func: {c-}
+  ffi-start cc
+  (fd-fdstat-get) call
+  ffi-done
+next func; make-native fd-fdstat-get
 
 func: {c-}
   stack@ 0 local.tee
@@ -71,6 +169,13 @@ func: {c-} locals c
 next func; make-native +!
 
 func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load
+  2 i32.const i32.shl
+  0 cell.store
+next func; make-native cells
+
+func: {c-}
   memory.size (push) call
 next func; make-native memory.size
 func: {c-}
@@ -95,7 +200,7 @@ next func; make-native ?dup
 
 func: {c-}
   stack@ 8 sub 0 local.tee
-  0 local.get 8 double.load 0 double.store
+  0 local.get 8 2cell.load 0 2cell.store
   0 local.get stack!
 next func; make-native 2dup
 
@@ -117,9 +222,9 @@ next func; make-native swap
 
 func: {c-}
   stack@ 0 local.tee
-  0 local.get 0 double.load
+  0 local.get 0 2cell.load
   0 local.get
-  0 local.get 8 double.load
+  0 local.get 8 2cell.load
   0 double.store 8 double.store
 next func; make-native 2swap
 
@@ -132,7 +237,7 @@ next func; make-native over
 
 func: {c-}
   stack@ 8 sub 0 local.tee
-  0 local.get 16 double.load
+  0 local.get 16 2cell.load
   0 double.store
   0 local.get stack!
 next func; make-native 2over
@@ -361,6 +466,12 @@ func: {c-}
   i32.and
   i32-binary-done
 next func; make-native and
+
+func: {c-}
+  i32-binary-start
+  i32.or
+  i32-binary-done
+next func; make-native or
 
 func: {c-}
   i32-binary-start

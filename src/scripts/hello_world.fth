@@ -5,7 +5,7 @@ program init-program
 program program!
 
 \ imports
-wasi-import: proc_exit {c-}
+wasi-import: proc_exit {c-} constant (proc-exit)
 
 \ table
 0 0 +funcref-table
@@ -46,7 +46,7 @@ func: {-}
   sum call
   16 i32.const
   2 0 i32.load
-  0 call \ call function 0, which is proc_exit
+  (proc-exit) call
 func; is-start
 
 variable outfile

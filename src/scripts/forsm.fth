@@ -16,8 +16,17 @@ create program |program| allot
 program init-program
 program program!
 
-wasi-import: proc_exit {c-}
-
+\ WASI imports
+wasi-import: proc_exit {c-} constant (proc-exit)
+wasi-import: args_get {cc-c} constant (args-get)
+wasi-import: args_sizes_get {cc-c} constant (args-sizes-get)
+wasi-import: fd_read {cccc-c} constant (fd-read)
+wasi-import: fd_write {cccc-c} constant (fd-write)
+wasi-import: path_open {cccccddcc-c} constant (path-open)
+wasi-import: fd_close {c-c} constant (fd-close)
+wasi-import: fd_prestat_get {cc-c} constant (fd-prestat-get)
+wasi-import: fd_prestat_dir_name {ccc-c} constant (fd-prestat-dir-name)
+wasi-import: fd_fdstat_get {cc-c} constant (fd-fdstat-get)
 variable funcref#
 0 funcref# !
 
@@ -36,8 +45,10 @@ variable funcref#
 : cell.store    ( offset -- ) 2 swap i32.store ;
 : byte.load     ( offset -- ) 0 swap i32.load8_u ;
 : byte.store    ( offset -- ) 0 swap i32.store8 ;
-: double.load   ( offset -- ) 2 swap i64.load ;
-: double.store  ( offset -- ) 2 swap i64.store ;
+: 2cell.load    ( offset -- ) 2 swap i64.load ;
+: 2cell.store   ( offset -- ) 2 swap i64.store ;
+: double.load   ( offset -- ) 2cell.load 32 i64.const i64.rotl ;
+: double.store  ( offset -- ) 32 i64.const i64.rotl 2cell.store ;
 
 \ given an XT, execute it
 type: {c-} constant callable-type
@@ -74,6 +85,12 @@ func: {-c} locals c
   rp@ 0 local.tee 0 cell.load
   0 local.get 4 add rp!
 func; constant (rpop)
+
+\ Implement the instruction pointer
+global: cmut DICT_BASE i32.const global; constant ip
+: ip@ ( -- ) ip global.get ;
+: ip! ( -- ) ip global.set ;
+: next ( -- ) ip@ 4 add ip! ;
 
 : grow-if-needed ( target buf -- )
   tuck buf.len @ - cell + dup >0
@@ -138,11 +155,11 @@ create v-tib TIB_CAPACITY allot
 
 \ variable and constant support
 func: {c-}
-  0 local.get (push) call
-func; make-callable constant (dovar)
+  0 local.get 4 add (push) call
+next func; make-callable constant (dovar)
 func: {c-}
-  0 local.get 0 cell.load (push) call
-func; make-callable constant (docon)
+  0 local.get 4 cell.load (push) call
+next func; make-callable constant (docon)
 
 \ manually compile a "CP" variable
 DICT_BASE cell + \ leave one cell at the start for the "main" XT
@@ -254,12 +271,7 @@ v-name>xt cell + constant >latest
   v-body postpone literal
 ; immediate
 
-\ the instruction pointer, (docol) and exit give us functions
-global: cmut DICT_BASE i32.const global; constant ip
-: ip@ ( -- ) ip global.get ;
-: ip! ( -- ) ip global.set ;
-: next ( -- ) ip@ 4 add ip! ;
-
+\ (docol) and exit give us functions
 func: {c-}
   ip@ (rpush) call
   0 local.get 4 add ip!
@@ -286,39 +298,21 @@ func: {-} \ inner interpreter
     ip@ 0 cell.load (execute) call
     0 br
   end
-func; is-start
+func; export: func _start
+
+0 export: table __indirect_function_table
+0 export: memory memory
 
 include ./forsm/01_definitions.fth
 include ./forsm/02_emulator.fth
 
-s" ./bootstrap-forth.fth" v-bootstrap
 s" ../prelude/01_core.fth" v-bootstrap
 s" ../prelude/02_memory.fth" v-bootstrap
 s" ../prelude/03_strings.fth" v-bootstrap
+s" ../prelude/04_system.fth" v-bootstrap
 
-\ handwritten colon definitions currently look like this
-make-colon condtest
-  v-' ?branch v-, v-here 0 v-,
-    v-' lit v-, 5 v-,
-  v-' branch v-, v-here 0 v-, swap v-here swap v-!
-    v-' lit v-, 6 v-,
-  v-here swap v-!
-v-' exit v-,
-
-make-colon main
-  v-' lit v-, 8 v-,
-  v-' square v-,
-  v-' lit v-, -1 v-,
-  v-' condtest v-,
-  v-' + v-,
-  v-' abort v-,
-v-' exit v-,
-
+s" ./bootstrap-forth.fth" v-bootstrap
 v-' main DICT_BASE v-!
-
-s" 3" v-evaluate s" square" v-evaluate .
--1 v-' condtest v-execute .
-0 v-' condtest v-execute .
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !

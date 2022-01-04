@@ -45,6 +45,7 @@ v-r0 v-rp !
     callable' ! of v-! endof
     callable' c! of v-c! endof
     callable' +! of v-+! endof
+    callable' cells of cells endof
     callable' cset of v-cset endof
     callable' creset of v-creset endof
     callable' >r of v->r endof
