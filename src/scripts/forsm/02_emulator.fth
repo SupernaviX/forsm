@@ -1,3 +1,70 @@
+: vstr>str ( vc-addr u -- c-addr u ) swap vaddr>addr swap ;
+
+\ Support emulation of words provided by the host
+create host-words 32 2* cells allot
+variable host-words#
+0 host-words# !
+: map-host-word ( from-xt to-xt -- )
+  host-words# @ 2* cells host-words + tuck ( from-xt addr to-xt addr )
+  cell + ! !
+  1 host-words# +!
+;
+: mapped-host-word ( from-xt -- to-xt | false )
+  host-words# @ 0 ?do
+    i 2* cells host-words +
+    2dup @ = if
+      nip cell + @
+      unloop exit
+    else drop
+    then
+  loop
+  drop false
+;
+: host-execute ( xt -- ran? )
+  mapped-host-word ?dup
+    if execute true
+    else false
+    then
+;
+
+\ Track execution tokens from the emulated forth which we should NOT emulate.
+\ This is for words like "source" which we are using while redefining them.
+\ We will compile references to the final definition, but execute the OG one.
+create host-deferred-words 16 2* cells allot
+variable host-deferred-words#
+0 host-deferred-words# !
+
+: host-deferred ( -- )
+  >latest v-@ ( nt )
+  host-deferred-words host-deferred-words# @ 2* cells + ( nt address )
+  over v-name>xt over ! \ store the virtual XT of the deferred word
+  swap v-name>string vstr>str 2dup find-name ( address c-addr u real-xt )
+  ?dup =0 if
+    ." Cannot defer unrecognized word " type cr
+    21 throw
+  then
+  name>xt mapped-host-word ( address c-addr u xt )
+  ?dup =0 if
+    ." No runtime behavior defined for deferred word " type cr
+    22 throw
+  then
+  nip nip
+  swap cell + ! \ store the XT of the word to actually run
+  1 host-deferred-words# +!
+;
+
+: execute-deferred-word ( xt -- ran? )
+  host-deferred-words# @ 0 ?do
+    i 2* cells host-deferred-words +
+    2dup @ = if
+      nip cell + @ execute
+      true unloop exit
+    else drop
+    then
+  loop
+  drop false
+;
+
 \ Use a virtual IP and return stack to emulate words during compilation
 variable v-ip
 create v-rstack 256 allot
@@ -15,7 +82,12 @@ v-r0 v-rp !
 
 \ Given an XT from the virtual interpreter, run it
 : v-execute' ( v-xt -- )
-  >r r@ v-@
+  >r
+  r@ execute-deferred-word if
+    cell v-ip +!
+    r> drop exit
+  then
+  r@ v-@
   case
     (docol) of
       v-ip @ v->r \ store current ip on the return stack
@@ -99,28 +171,6 @@ v-r0 v-rp !
   repeat
 ;
 
-\ Support emulation of words provided by the host
-create host-words 16 2* cells allot
-variable host-words#
-0 host-words# !
-: map-host-word ( from-xt to-xt -- )
-  host-words# @ 2* cells host-words + tuck ( from-xt addr to-xt addr )
-  cell + ! !
-  1 host-words# +!
-;
-: host-execute ( xt -- ran? )
-  host-words# @ 0 ?do
-    i 2* cells host-words + ( xt mapping )
-    2dup @ = if
-      nip
-      cell + @ execute
-      true unloop exit
-    else drop
-    then
-  loop
-  false
-;
-
 : v-compiling? ( -- ? ) [v-'] state v-execute' v-@ ;
 : v-unrecognized-word ( c-addr u -- )
   ." Unrecognized word: " type cr
@@ -182,15 +232,17 @@ variable host-words#
 
 variable v-source-fid
 
+: v-source-id ( -- n ) v-source-fid @ ;
+
 : v-source ( -- c-addr u )
   [v-body] tib v-@
-  [v-body] tib# v-@
+  [v-body] #tib v-@
 ;
 : v-refill ( -- ? )
   0 [v-body] >in v-! \ reset >IN
   TIB_BASE vaddr>addr TIB_CAPACITY v-source-fid @ ( c-addr u1 fid )
   read-line throw ( u2 more? )
-  swap [v-body] tib# v-! \ write how much we read
+  swap [v-body] #tib v-! \ write how much we read
 ;
 
 : v-parse-area ( -- vc-addr u ) v-source [v-body] >in v-@ /string ;
@@ -219,7 +271,6 @@ variable v-source-fid
   drop swap - v-parse-consume
   bl v-parse
 ;
-: vstr>str ( vc-addr u -- c-addr u ) swap vaddr>addr swap ;
 
 : v-interpret ( -- )
   begin
@@ -228,7 +279,7 @@ variable v-source-fid
       2drop exit
     then
     v-evaluate
-  again
+    again
 ;
 
 : v-bootstrap ( c-addr u -- )
@@ -242,12 +293,6 @@ variable v-source-fid
 
 \ support calling some debugging utils in the emulator
 : v-type ( vc-addr u -- ) vstr>str type ;
-
-' . ' . map-host-word
-' cr ' cr map-host-word
-' emit ' emit map-host-word
-' type ' v-type map-host-word
-' .s ' .s map-host-word
 
 \ compilation functions
 : v-\ ( -- ) -1 v-parse 2drop ;
@@ -284,12 +329,17 @@ variable v-source-fid
   then
 ;
 
+
+' source-id ' v-source-id map-host-word
+' source ' v-source map-host-word
+' refill ' v-refill map-host-word
 ' parse ' v-parse map-host-word
 ' parse-name ' v-parse-name map-host-word
 ' \ ' v-\ map-host-word
-' ( ' v-( map-host-Word
+' ( ' v-( map-host-word
 ' postpone ' v-postpone map-host-word
 ' create ' v-create map-host-word
 ' variable ' v-variable map-host-word
 ' constant ' v-constant map-host-word
 ' : ' v-: map-host-word
+' host-deferred ' host-deferred map-host-word

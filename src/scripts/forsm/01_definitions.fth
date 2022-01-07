@@ -3,10 +3,13 @@
 : v-lit ( n -- ) [v-'] lit v-, v-, ;
 
 0 make-variable state
+make-colon compiling?
+  v-xt state v-xt @
+v-xt exit
 
 0 make-variable >in
 TIB_BASE make-variable tib
-0 make-variable tib#
+0 make-variable #tib
 
 0 make-constant false
 -1 make-constant true
@@ -108,6 +111,7 @@ v-immediate
 
 make-colon literal
   v-' lit v-lit v-xt ,
+  v-xt ,
 v-xt exit
 v-immediate
 

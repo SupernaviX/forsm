@@ -1,6 +1,9 @@
-create inputbuf 80 allot
 : main ( -- )
-  inputbuf 80 accept
-  inputbuf over type 10 emit
-  abort
+  refill drop
+  begin parse-name dup
+  while type 10 emit
+  repeat
+  2drop
+  s" nice" type 10 emit
+  69 abort
 ;

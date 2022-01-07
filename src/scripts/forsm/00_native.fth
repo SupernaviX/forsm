@@ -405,26 +405,48 @@ func: {c-}
   0 cell.store
 next func; make-native >0
 
-: i32-binary-start ( -- )
+: cc-c-start ( -- )
   stack@ 0 local.tee
   0 local.get 4 cell.load
   0 local.get 0 cell.load
 ;
-: i32-binary-done ( -- )
+: cc-c-done ( -- )
   4 cell.store
   0 local.get 4 add stack!
 ;
 
+: dd-d-start ( -- )
+  stack@ 0 local.tee
+  0 local.get 8 double.load
+  0 local.get 0 double.load
+;
+
+: dd-d-done ( -- )
+  8 double.store
+  0 local.get 8 add stack!
+;
+
+: dc-d-start ( -- )
+  stack@ 0 local.tee
+  0 local.get 4 double.load
+  0 local.get 0 cell.load
+;
+
+: dc-d-done ( -- )
+  4 double.store
+  0 local.get 4 add stack!
+;
+
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.add
-  i32-binary-done
+  cc-c-done
 next func; make-native +
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.sub
-  i32-binary-done
+  cc-c-done
 next func; make-native -
 
 func: {c-}
@@ -440,10 +462,36 @@ func: {c-}
 next func; make-native 1-
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.mul
-  i32-binary-done
+  cc-c-done
 next func; make-native *
+
+func: {c-}
+  dd-d-start
+  i64.add
+  dd-d-done
+next func; make-native d+
+
+func: {c-}
+  dd-d-start
+  i64.sub
+  dd-d-done
+next func; make-native d-
+
+func: {c-}
+  dc-d-start
+  i64.extend_i32_s
+  i64.mul
+  dc-d-done
+next func; make-native d*
+
+func: {c-}
+  dc-d-start
+  i64.extend_i32_u
+  i64.mul
+  dc-d-done
+next func; make-native ud*
 
 func: {c-} locals c
   (pop) call 0 local.tee
@@ -462,27 +510,27 @@ func: {c-} locals c
 next func; make-native max
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.and
-  i32-binary-done
+  cc-c-done
 next func; make-native and
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.or
-  i32-binary-done
+  cc-c-done
 next func; make-native or
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.shl
-  i32-binary-done
+  cc-c-done
 next func; make-native lshift
 
 func: {c-}
-  i32-binary-start
+  cc-c-start
   i32.shr_u
-  i32-binary-done
+  cc-c-done
 next func; make-native rshift
 
 func: {c-}

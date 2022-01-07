@@ -1,5 +1,4 @@
 \ >IN is the offset in SOURCE that we've currently parsed to
-variable >in host-deferred
 
 6 cells constant |source|
 : source.buf    0 cells + ;
@@ -111,7 +110,7 @@ source-buffer0 'source-buffer !
 ;
 \ Now we have a parse-name which reads from the proper source at all times.
 
-variable base host-deferred
+variable base
 : binary 2 base ! ;
 : decimal 10 base ! ;
 : hex 16 base ! ;
@@ -171,25 +170,11 @@ variable base host-deferred
 \ compile the ascii value of the next char into the current def
 : [char] parse-name drop c@ postpone literal ; immediate
 
-\ Redefine every word that called parse or parse-name (to use the non-bootstrapped versions of them)
+\ comments
 : \ -1 parse 2drop ; immediate
 : ( [char] ) parse 2drop ; immediate
-: ' ( -- xt )
-  parse-name find-name
-  dup =0 if -2 throw then
-  name>xt
-;
-: ['] ( -- xt )
-  ' lit lit , ,
-; immediate
-: postpone ( -- )
-  parse-name find-name
-  dup =0 if -2 throw then
-  dup name>immediate?
-    if name>xt ,
-    else ['] lit , name>xt , ['] , ,
-    then
-; immediate
+
+\ defining words
 : create parse-name header ;
 : variable ( -- ) create 0 , ;
 : constant ( val -- ) create (docon) xt, , ;

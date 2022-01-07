@@ -310,6 +310,7 @@ s" ../prelude/01_core.fth" v-bootstrap
 s" ../prelude/02_memory.fth" v-bootstrap
 s" ../prelude/03_strings.fth" v-bootstrap
 s" ../prelude/04_system.fth" v-bootstrap
+s" ../prelude/05_parser.fth" v-bootstrap
 
 s" ./bootstrap-forth.fth" v-bootstrap
 v-' main DICT_BASE v-!
