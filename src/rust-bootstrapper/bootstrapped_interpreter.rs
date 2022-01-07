@@ -251,7 +251,7 @@ fn build_io(compiler: &mut Compiler) {
 fn build_parser(compiler: &mut Compiler) {
     compiler.define_variable_word(">IN", 0);
 
-    compiler.define_variable_word("TIB", 0x10);
+    compiler.define_constant_word("TIB", 0x10);
     compiler.define_constant_word("TIB-MAX", 0xc0);
     compiler.define_variable_word("#TIB", 0);
 
@@ -262,14 +262,14 @@ fn build_parser(compiler: &mut Compiler) {
         "REFILL",
         vec![
             Lit(0), XT(">IN"), XT("!"), // Reset >IN
-            XT("TIB"), XT("@"), XT("TIB-MAX"), XT("ACCEPT"), // Read a line
+            XT("TIB"), XT("TIB-MAX"), XT("ACCEPT"), // Read a line
             XT("DUP"), XT("#TIB"), XT("!"), // store the new length of TIB
             XT("<>0"), // return if it's nonzero
         ],
     );
 
     // current address and length of the input buffer ( -- c-addr u )
-    compiler.define_colon_word("SOURCE", vec![XT("TIB"), XT("@"), XT("#TIB"), XT("@")]);
+    compiler.define_colon_word("SOURCE", vec![XT("TIB"), XT("#TIB"), XT("@")]);
 
     // is there anything to parse ( -- ? )
     compiler.define_colon_word(

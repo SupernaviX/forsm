@@ -16,15 +16,14 @@ variable 'source
 \ initialize an "stdin" source record at the bottom of the stack
 source-records |source| 8 * + constant source0
 source0 'source !
-tib @ source0 source.buf !
+tib source0 source.buf !
 #tib @ source0 source.len !
 0 source0 source.id !
 0 source0 source.in !
 0 source0 source.name !
 0 source0 source.name# !
 
-\ redefine tib and #tib to use this source record as source-of-truth
-source0 source.buf constant tib
+\ redefine #tib to use this source record as source-of-truth
 source0 source.len constant #tib
 
 \ build a stack of source buffers as well

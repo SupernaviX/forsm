@@ -8,7 +8,7 @@ make-colon compiling?
 v-xt exit
 
 0 make-variable >in
-TIB_BASE make-variable tib
+TIB_BASE make-constant tib
 0 make-variable #tib
 
 0 make-constant false
