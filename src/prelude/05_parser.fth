@@ -113,6 +113,7 @@ variable base
 : binary 2 base ! ;
 : decimal 10 base ! ;
 : hex 16 base ! ;
+decimal
 
 : ?digit ( c -- digit -1 | 0 )
   upcase \ normalize to uppercase
@@ -157,7 +158,7 @@ variable base
     then
   s>unumber?
     if
-      r> if -1 d* then
+      r> if dnegate then
       true
     else r> drop false
     then

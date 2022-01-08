@@ -478,6 +478,9 @@ hex
 : i32.sub           ( -- )              6b compile-byte ;
 : i32.mul           ( -- )              6c compile-byte ;
 : i32.div_s         ( -- )              6d compile-byte ;
+: i32.div_u         ( -- )              6e compile-byte ;
+: i32.rem_s         ( -- )              6f compile-byte ;
+: i32.rem_u         ( -- )              70 compile-byte ;
 : i32.and           ( -- )              71 compile-byte ;
 : i32.or            ( -- )              72 compile-byte ;
 : i32.xor           ( -- )              73 compile-byte ;
@@ -487,7 +490,18 @@ hex
 : i64.add           ( -- )              7c compile-byte ;
 : i64.sub           ( -- )              7d compile-byte ;
 : i64.mul           ( -- )              7e compile-byte ;
+: i64.div_s         ( -- )              7f compile-byte ;
+: i64.div_u         ( -- )              80 compile-byte ;
+: i64.rem_s         ( -- )              81 compile-byte ;
+: i64.rem_u         ( -- )              82 compile-byte ;
+: i64.and           ( -- )              83 compile-byte ;
+: i64.or            ( -- )              84 compile-byte ;
+: i64.xor           ( -- )              85 compile-byte ;
+: i64.shl           ( -- )              86 compile-byte ;
+: i64.shr_s         ( -- )              87 compile-byte ;
+: i64.shr_u         ( -- )              88 compile-byte ;
 : i64.rotl          ( -- )              89 compile-byte ;
+: i32.wrap_i64      ( -- )              a7 compile-byte ;
 : i64.extend_i32_s  ( -- )              ac compile-byte ;
 : i64.extend_i32_u  ( -- )              ad compile-byte ;
 decimal

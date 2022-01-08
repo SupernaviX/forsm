@@ -1,9 +1,10 @@
 : main ( -- )
+  1 2 3 4 .s cr 2drop 2drop .s cr
   refill drop
   begin parse-name dup
-  while type 10 emit
+  while type cr
   repeat
   2drop
-  s" nice" type 10 emit
+  ." nice" cr
   69 abort
 ;

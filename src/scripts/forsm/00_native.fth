@@ -279,6 +279,22 @@ func: {c-}  \ rot rot
 next func; make-native -rot
 
 func: {c-}
+  stack@ 0 local.tee
+  0 local.get cell.load \ read the head of the stack
+  1 add \ +1 to account for the address itself at the top of the stack
+  2 i32.const i32.shl \ *4 to make it an offset
+  0 local.get i32.add 0 cell.load \ read that offset from the head
+  0 cell.store \ and store it back ni the head
+next func; make-native pick
+
+func: {c-}
+  PARAM_STACK_BASE i32.const
+  stack@ i32.sub
+  2 i32.const i32.shr_u
+  (push) call
+next func; make-native depth
+
+func: {c-}
   (pop) call (rpush) call
 next func; make-native >r
 
@@ -432,6 +448,11 @@ next func; make-native >0
   0 local.get 0 cell.load
 ;
 
+: dc-load-locals ( -- )
+  0 local.get 4 double.load 1 local.tee
+  0 local.get 0 cell.load i64.extend_i32_s 2 local.tee
+;
+
 : dc-d-done ( -- )
   4 double.store
   0 local.get 4 add stack!
@@ -468,6 +489,28 @@ func: {c-}
 next func; make-native *
 
 func: {c-}
+  stack@ 0 local.tee
+  0 i32.const 0 local.get 0 cell.load i32.sub
+  0 cell.store
+next func; make-native negate
+
+func: {c-} locals cc
+  stack@ 0 local.tee
+  0 local.get 0 cell.load 1 local.tee
+  31 i32.const i32.shr_s 2 local.tee
+  1 local.get i32.xor 2 local.get i32.sub
+  0 cell.store
+next func; make-native abs
+
+func: {c-}
+  stack@ 4 sub 0 local.tee
+  0 local.get 4 cell.load i64.extend_i32_s 0 double.store
+  0 local.get stack!
+next func; make-native s>d
+
+v-' drop v-@ make-native d>s \ converting a double to a cell is just "drop"
+
+func: {c-}
   dd-d-start
   i64.add
   dd-d-done
@@ -492,6 +535,39 @@ func: {c-}
   i64.mul
   dc-d-done
 next func; make-native ud*
+
+func: {c-}
+  stack@ 0 local.tee
+  0 i64.const 0 local.get 0 double.load i64.sub
+  0 double.store
+next func; make-native dnegate
+
+func: {c-} locals dd
+  stack@ 0 local.tee
+  0 local.get 0 double.load 1 local.tee
+  63 i64.const i64.shr_s 2 local.tee
+  1 local.get i64.xor 2 local.get i64.sub
+  0 double.store
+next func; make-native dabs
+
+func: {c-} locals dd
+  stack@ 0 local.tee dc-load-locals
+  i64.rem_u i32.wrap_i64
+  8 cell.store
+  0 local.get 1 local.get 2 local.get
+  i64.div_u i32.wrap_i64
+  4 cell.store
+  0 local.get 4 add stack!
+next func; make-native um/mod
+
+func: {c-} locals dd
+  stack@ 0 local.tee dc-load-locals
+  i64.rem_u i32.wrap_i64
+  8 cell.store
+  0 local.get 1 local.get 2 local.get
+  i64.div_u
+  0 double.store
+next func; make-native ud/mod
 
 func: {c-} locals c
   (pop) call 0 local.tee
