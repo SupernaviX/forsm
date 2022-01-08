@@ -65,13 +65,11 @@ func; make-native ?branch
 
 func: {c-}
   (pop) call (execute) call
-next func; make-native execute
+func; make-native execute
 
-\ exit with some status code
-\ for now, the exit code is the only functioning output
 func: {c-}
   (pop) call (proc-exit) call
-next func; make-native abort
+next func; make-native proc-exit
 
 func: {c-}
   ffi-start cc
@@ -225,7 +223,7 @@ func: {c-}
   0 local.get 0 2cell.load
   0 local.get
   0 local.get 8 2cell.load
-  0 double.store 8 double.store
+  0 2cell.store 8 2cell.store
 next func; make-native 2swap
 
 func: {c-}
@@ -238,7 +236,7 @@ next func; make-native over
 func: {c-}
   stack@ 8 sub 0 local.tee
   0 local.get 16 2cell.load
-  0 double.store
+  0 2cell.store
   0 local.get stack!
 next func; make-native 2over
 

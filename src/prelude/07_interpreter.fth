@@ -1,4 +1,29 @@
-\ TODO: implement find-name;
+\ case-insensitive name equality
+\ assume that c-addr2 is capitalized,
+\ and that hidden words have a non-ASCII first character
+: name= ( c-addr1 u1 c-addr2 u2 -- ? )
+  rot over <> if
+    drop 2drop false exit
+  then ( c-addr1 c-addr2 len )
+  0 ?do ( c-addr1 c-addr2 )
+    over c@ upchar over c@ <> if
+      2drop false unloop exit
+    then
+    swap 1+ swap 1+
+  loop
+  2drop true
+;
+
+: find-name ( c-addr u -- nt | 0 )
+  latest @ ( c-addr u nt )
+  begin dup
+  while
+    >r 2dup r@ -rot r> \ clone the stack
+    name>string name= =0
+  while name>backword
+  repeat then
+  nip nip
+;
 
 : ' ( -- xt )
   parse-name find-name
@@ -7,7 +32,7 @@
 ;
 
 : ['] ( -- xt )
-  ' lit lit , ,
+  ' [ ' literal , ]
 ; immediate
 
 : postpone ( -- )
@@ -30,17 +55,21 @@
     ?dup if \ if we found the word in the dictionary,
       nip nip \ get rid of the name
       compiling? if
-        compile-name
+        dup name>xt
+        swap name>immediate?
+          if execute
+          else ,
+          then
       else
-        interpret-name
+        name>xt execute
       then
     else
       \ TODO: double-width numbers
       2dup s>number? nip if \ if it's a number, either bake it in or leave it on the stack
         nip nip 
-        compiling? if
-          compile-literal 
-        then
+        compiling?
+          if postpone literal
+          then \ no else branch, just leave the number on the stack
       else
         drop
         ." Unrecognized word: " type cr

@@ -329,3 +329,5 @@ variable argv
 : next-arg ( -- c-addr u )
   1 arg shift-args
 ;
+
+: bye ( -- ) 0 proc-exit ;

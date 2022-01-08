@@ -63,8 +63,20 @@ make-colon header
   v-xt (dovar) v-xt , \ (dovar) ,
 v-xt exit
 
+make-colon name>u
+  v-xt c@ 31 v-lit v-xt and
+v-xt exit
+
+make-colon name>string
+  v-xt dup v-xt 1+ v-xt swap v-xt name>u
+v-xt exit
+
+make-colon name>backword
+  v-xt dup v-xt name>u v-xt 1+ v-xt aligned v-xt + v-xt @
+v-xt exit
+
 make-colon name>xt
-  v-xt dup v-xt c@ v-xt 1+ v-xt aligned v-xt + v-xt cell v-xt +
+  v-xt dup v-xt name>u v-xt 1+ v-xt aligned v-xt + v-xt cell v-xt +
 v-xt exit
 
 make-colon name>immediate?

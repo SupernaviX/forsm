@@ -730,7 +730,7 @@ impl Compiler {
             ],
         );
         self.start = start;
-        self.define_native_word("BYE", vec![], vec![I32Const(-1), SetGlobal(stopped)]);
+        self.define_native_word("STOP", vec![], vec![I32Const(-1), SetGlobal(stopped)]);
 
         // DOCOL is how a colon word is executed. It just messes with the IP.
         let docol = self.create_native_callable(
@@ -1378,7 +1378,7 @@ impl Compiler {
         // For testing purposes, define a word that just calls another word and stops.
         self.define_colon_word(
             "RUN-WORD",
-            vec![ColonValue::XT("EXECUTE"), ColonValue::XT("BYE")],
+            vec![ColonValue::XT("EXECUTE"), ColonValue::XT("STOP")],
         );
 
         // Now that we're done adding things to the dictionary,

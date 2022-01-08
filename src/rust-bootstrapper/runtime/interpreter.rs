@@ -24,7 +24,7 @@ impl InterpreterRuntime {
     }
 
     pub fn interpret(&self, input: &str) -> Result<String> {
-        self.write_input(&format!("{} BYE", input))?;
+        self.write_input(&format!("{} STOP", input))?;
         self.execute("_start")?;
         let result = self.read_output()?;
         // get the prompt out of there

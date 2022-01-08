@@ -30,7 +30,7 @@ wasi-import: fd_fdstat_get {cc-c} constant (fd-fdstat-get)
 variable funcref#
 0 funcref# !
 
-1 0 +memory
+1 10 +memory
 0 elemsec: 0 i32.const elemsec; elemsec!
 
 : make-callable ( func -- index )
@@ -312,9 +312,9 @@ s" ../prelude/03_strings.fth" v-bootstrap
 s" ../prelude/04_system.fth" v-bootstrap
 s" ../prelude/05_parser.fth" v-bootstrap
 s" ../prelude/06_output.fth" v-bootstrap
+s" ../prelude/07_interpreter.fth" v-bootstrap
 
-s" ./bootstrap-forth.fth" v-bootstrap
-v-' main DICT_BASE v-!
+v-' quit DICT_BASE v-!
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !
