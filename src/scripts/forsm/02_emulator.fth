@@ -111,7 +111,6 @@ v-r0 v-rp !
     cell v-ip +!  \ everything below this line just increments IP normally
     (dovar) of r@ cell + endof
     (docon) of r@ cell + v-@ endof
-    callable' execute of recurse endof
     callable' @ of v-@ endof
     callable' c@ of v-c@ endof
     callable' ! of v-! endof
@@ -157,6 +156,9 @@ v-r0 v-rp !
     callable' 1- of 1- endof
     callable' * of * endof
     callable' and of and endof
+    callable' or of or endof
+    callable' lshift of lshift endof
+    callable' rshift of rshift endof
     ( default )
       ." Callable not supported: " dup . cr
       140 throw

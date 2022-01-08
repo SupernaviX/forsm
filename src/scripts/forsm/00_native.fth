@@ -488,6 +488,18 @@ next func; make-native *
 
 func: {c-}
   stack@ 0 local.tee
+  0 local.get 0 cell.load
+  1 i32.const i32.shl 0 cell.store
+next func; make-native 2*
+
+func: {c-}
+  stack@ 0 local.tee
+  0 local.get 0 cell.load
+  1 i32.const i32.shr_s 0 cell.store
+next func; make-native 2/
+
+func: {c-}
+  stack@ 0 local.tee
   0 i32.const 0 local.get 0 cell.load i32.sub
   0 cell.store
 next func; make-native negate
@@ -606,6 +618,11 @@ func: {c-}
   i32.shr_u
   cc-c-done
 next func; make-native rshift
+func: {c-}
+  cc-c-start
+  i32.shr_s
+  cc-c-done
+next func; make-native arshift
 
 func: {c-}
   (pop) call 0 local.tee

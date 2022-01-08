@@ -50,11 +50,19 @@ variable funcref#
 : double.load   ( offset -- ) 2cell.load 32 i64.const i64.rotl ;
 : double.store  ( offset -- ) 32 i64.const i64.rotl 2cell.store ;
 
-\ given an XT, execute it
+\ A "callable" is any function in the indirect function table.
+\ It takes one parameter; an "execution token" (XT).
 type: {c-} constant callable-type
+
+\ Given an XT, execute it.
+\ In this system, an execution token is a 32-bit address.
+\ The low 8 bits of the value are a table index,
+\ and the rest are a 24-bit "immediate" value.
+\ Any parameter data is stored immediately after the address.
+\ Call the function at that table index, with the XT as an argument.
 func: {c-}
   0 local.get
-  0 local.get 0 cell.load
+  0 local.get 0 cell.load 255 i32.const i32.and
   callable-type call_indirect
 func; constant (execute)
 
@@ -259,8 +267,7 @@ v-name>xt cell + constant >latest
     then
 ;
 : [v-'] ( -- )
-  v-'
-  lit lit , ,
+  v-' postpone literal
 ; immediate
 
 \ Get the address used to back a variable
@@ -271,11 +278,21 @@ v-name>xt cell + constant >latest
   v-body postpone literal
 ; immediate
 
-\ (docol) and exit give us functions
+\ (docol) adds support for colon definitions
 func: {c-}
   ip@ (rpush) call
   0 local.get 4 add ip!
 func; make-callable constant (docol)
+
+\ (dodoes) adds support for "does>",
+\ which lets you customize the runtime behavior of CREATEd words.
+func: {c-}
+  ip@ (rpush) call
+  0 local.get 4 add (push) call
+  0 local.get 0 cell.load 8 i32.const i32.shr_u ip!
+func; make-callable constant (dodoes)
+
+\ exit lets us return from colon definitions
 func: {c-}
   (rpop) call 4 add ip!
 func; make-native exit
@@ -313,6 +330,7 @@ s" ../prelude/04_system.fth" v-bootstrap
 s" ../prelude/05_parser.fth" v-bootstrap
 s" ../prelude/06_output.fth" v-bootstrap
 s" ../prelude/07_interpreter.fth" v-bootstrap
+s" ../prelude/08_utils.fth" v-bootstrap
 
 v-' quit DICT_BASE v-!
 

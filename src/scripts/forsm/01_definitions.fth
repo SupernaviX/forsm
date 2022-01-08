@@ -17,6 +17,7 @@ TIB_BASE make-constant tib
 (dovar) make-constant (dovar)
 (docon) make-constant (docon)
 (docol) make-constant (docol)
+(dodoes) make-constant (dodoes)
 
 make-colon here
   v-xt cp
@@ -118,6 +119,20 @@ make-colon ;
   v-' exit v-lit v-xt ,
   v-xt reveal
   v-xt [
+v-xt exit
+v-immediate
+
+make-colon >body
+  v-xt cell v-xt +
+v-xt exit
+
+make-colon does>
+  v-' lit v-lit v-xt , \ compile "lit"
+  v-xt here 0 v-lit v-xt , \ compile 0 (but track the address to fill in later)
+  v-' xt, v-lit v-xt , \ compile "xt,"
+  v-' exit v-lit v-xt , \ compile "exit"
+  \ now HERE is at the address of the runtime word, so we can fill in that address from before
+  v-xt (dodoes) v-xt here 8 v-lit v-xt lshift v-xt or v-xt swap v-xt !
 v-xt exit
 v-immediate
 
