@@ -179,7 +179,6 @@ next func; make-native memory.size
 func: {c-}
   (pop) call memory.grow (push) call
 next func; make-native memory.grow
-HEAP_BASE make-constant heap-base
 
 func: {c-}
   stack@ 4 sub 0 local.tee
@@ -278,7 +277,7 @@ next func; make-native -rot
 
 func: {c-}
   stack@ 0 local.tee
-  0 local.get cell.load \ read the head of the stack
+  0 local.get 0 cell.load \ read the head of the stack
   1 add \ +1 to account for the address itself at the top of the stack
   2 i32.const i32.shl \ *4 to make it an offset
   0 local.get i32.add 0 cell.load \ read that offset from the head
@@ -322,6 +321,17 @@ next func; make-native r-depth
   4 cell.store
   0 local.get 4 add stack!
 ;
+: i64-comparator-start ( -- )
+  stack@ 0 local.tee
+  0 i32.const
+  0 local.get 8 double.load
+  0 local.get 0 double.load
+;
+: i64-comparator-done ( -- )
+  i32.sub
+  12 cell.store
+  0 local.get 12 add stack!
+;
 
 func: {c-}
   i32-comparator-start
@@ -330,10 +340,22 @@ func: {c-}
 next func; make-native =
 
 func: {c-}
+  i64-comparator-start
+  i64.eq
+  i64-comparator-done
+next func; make-native d=
+
+func: {c-}
   i32-comparator-start
   i32.ne
   i32-comparator-done
 next func; make-native <>
+
+func: {c-}
+  i64-comparator-start
+  i64.ne
+  i64-comparator-done
+next func; make-native d<>
 
 func: {c-}
   i32-comparator-start
@@ -348,6 +370,12 @@ func: {c-}
 next func; make-native u<
 
 func: {c-}
+  i64-comparator-start
+  i64.lt_s
+  i64-comparator-done
+next func; make-native d<
+
+func: {c-}
   i32-comparator-start
   i32.le_s
   i32-comparator-done
@@ -358,6 +386,12 @@ func: {c-}
   i32.le_u
   i32-comparator-done
 next func; make-native u<=
+
+func: {c-}
+  i64-comparator-start
+  i64.le_s
+  i64-comparator-done
+next func; make-native d<=
 
 func: {c-}
   i32-comparator-start
@@ -372,6 +406,12 @@ func: {c-}
 next func; make-native u>
 
 func: {c-}
+  i64-comparator-start
+  i64.gt_s
+  i64-comparator-done
+next func; make-native d>
+
+func: {c-}
   i32-comparator-start
   i32.ge_s
   i32-comparator-done
@@ -382,6 +422,12 @@ func: {c-}
   i32.ge_u
   i32-comparator-done
 next func; make-native u>=
+
+func: {c-}
+  i64-comparator-start
+  i64.ge_s
+  i64-comparator-done
+next func; make-native d>=
 
 func: {c-}
   stack@ 0 local.tee
@@ -424,6 +470,12 @@ next func; make-native >0
   0 local.get 4 cell.load
   0 local.get 0 cell.load
 ;
+
+: cc-load-locals ( -- )
+  0 local.get 4 cell.load 1 local.tee
+  0 local.get 0 cell.load 2 local.tee
+;
+
 : cc-c-done ( -- )
   4 cell.store
   0 local.get 4 add stack!
@@ -569,6 +621,80 @@ func: {c-} locals dd
   4 cell.store
   0 local.get 4 add stack!
 next func; make-native um/mod
+
+func: {c-} locals ccccc
+  stack@ 0 local.tee cc-load-locals
+  i32.div_s 3 local.set \ store quotient for now
+  1 local.get 2 local.get
+  i32.rem_s 4 local.tee \ store remainder as well
+
+  \ use the remainder to find the "real" modulo
+  2 local.get 0 i32.const \ conditionally add the divisor
+  1 local.get 2 local.get i32.xor 0 i32.const i32.lt_s \ if divisor and dividend have mismatched signs
+  4 local.get 0 i32.const i32.ne i32.and \ AND if remainder is nonzero
+  5 local.tee \ (store this decision for later)
+  select i32.add
+  4 cell.store
+
+  \ use the quotient to find the "real" quotient
+  0 local.get
+  3 local.get 
+  1 i32.const 0 i32.const \ conditionally subtract 1
+  5 local.get \ with the same conditions as before
+  select i32.sub
+  0 cell.store
+next func; make-native /mod
+
+make-colon /
+  v-' /mod v-, v-' nip v-,
+v-' exit v-,
+
+make-colon mod
+  v-' /mod v-, v-' drop v-,
+v-' exit v-,
+
+func: {c-} locals cc
+  stack@ 0 local.tee cc-load-locals
+  i32.rem_u
+  4 cell.store
+  0 local.get 1 local.get 2 local.get
+  i32.div_u
+  0 cell.store
+next func; make-native u/mod
+
+func: {c-} locals dd
+  stack@ 0 local.tee dc-load-locals
+  i64.rem_s i32.wrap_i64
+  8 cell.store
+  0 local.get 1 local.get 2 local.get
+  i64.div_s i32.wrap_i64
+  4 cell.store
+  0 local.get 4 add stack!
+next func; make-native sm/rem
+
+func: {c-} locals ddddc
+  stack@ 0 local.tee dc-load-locals
+  i64.div_s 3 local.set \ store quotient for now
+  1 local.get 2 local.get
+  i64.rem_s 4 local.tee \ store remainder as well
+
+  \ use the remainder to find the "real" modulo
+  2 local.get 0 i64.const \ conditionally add the divisor
+  1 local.get 2 local.get i64.xor 0 i64.const i64.lt_s \ if divisor and dividend have mismatched signs
+  4 local.get 0 i64.const i64.ne i32.and \ AND if remainder is nonzero
+  5 local.tee \ (store this decision for later)
+  select i64.add i32.wrap_i64
+  8 cell.store
+
+  \ use the quotient to find the "real" quotient
+  0 local.get
+  3 local.get 
+  1 i64.const 0 i64.const \ conditionally add 1
+  5 local.get \ with the same conditions as before
+  select i64.sub i32.wrap_i64
+  4 cell.store
+  0 local.get 4 add stack!
+next func; make-native fm/mod
 
 func: {c-} locals dd
   stack@ 0 local.tee dc-load-locals

@@ -14,6 +14,11 @@ TIB_BASE make-constant tib
 0 make-constant false
 -1 make-constant true
 4 make-constant cell
+
+DICT_BASE make-constant dict-base
+DICT_CAPACITY make-constant dict-capacity
+HEAP_BASE make-constant heap-base
+
 (dovar) make-constant (dovar)
 (docon) make-constant (docon)
 (docol) make-constant (docol)

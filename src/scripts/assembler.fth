@@ -474,6 +474,12 @@ hex
 : i32.le_u          ( -- )              4d compile-byte ;
 : i32.ge_s          ( -- )              4e compile-byte ;
 : i32.ge_u          ( -- )              4f compile-byte ;
+: i64.eq            ( -- )              51 compile-byte ;
+: i64.ne            ( -- )              52 compile-byte ;
+: i64.lt_s          ( -- )              53 compile-byte ;
+: i64.gt_s          ( -- )              55 compile-byte ;
+: i64.le_s          ( -- )              57 compile-byte ;
+: i64.ge_s          ( -- )              59 compile-byte ;
 : i32.add           ( -- )              6a compile-byte ;
 : i32.sub           ( -- )              6b compile-byte ;
 : i32.mul           ( -- )              6c compile-byte ;

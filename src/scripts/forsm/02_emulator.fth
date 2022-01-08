@@ -345,3 +345,4 @@ variable v-source-fid
 ' constant ' v-constant map-host-word
 ' : ' v-: map-host-word
 ' host-deferred ' host-deferred map-host-word
+' host-finalize ' host-finalize map-host-word

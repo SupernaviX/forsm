@@ -11,6 +11,7 @@ f100 constant HEAP_BASE \ so it's safe for HEAP_BASE to start at the same addr a
 decimal
 
 DICT_BASE TIB_BASE - constant TIB_CAPACITY
+PARAM_STACK_BASE DICT_BASE - constant DICT_CAPACITY
 
 create program |program| allot
 program init-program
@@ -160,6 +161,10 @@ create v-tib TIB_CAPACITY allot
 : v-name>string ( v-nt -- vc-addr u ) dup 1+ swap v-name>u ;
 : v-name>backword ( v-nt -- v-nt ) dup v-name>u 1+ + aligned v-@ ;
 : v-name>immediate? ( v-nt -- ? ) v-c@ 64 and <>0 ;
+
+: host-finalize ( v-xt -- )
+  DICT_BASE v-!
+;
 
 \ variable and constant support
 func: {c-}
@@ -331,8 +336,7 @@ s" ../prelude/05_parser.fth" v-bootstrap
 s" ../prelude/06_output.fth" v-bootstrap
 s" ../prelude/07_interpreter.fth" v-bootstrap
 s" ../prelude/08_utils.fth" v-bootstrap
-
-v-' quit DICT_BASE v-!
+s" ../prelude/FF_main.fth" v-bootstrap
 
 variable outfile
 s" bin/forth.wasm" w/o create-file throw outfile !
