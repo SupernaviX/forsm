@@ -79,7 +79,7 @@ impl Assembler {
         self.update(|builder| {
             builder
                 .memory()
-                .with_max(Some(40))
+                .with_max(Some(200))
                 .build()
                 .export()
                 .field("memory")

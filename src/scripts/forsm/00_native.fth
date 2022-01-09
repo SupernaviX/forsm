@@ -487,6 +487,11 @@ next func; make-native >0
   0 local.get 0 double.load
 ;
 
+: dd-load-locals ( -- )
+  0 local.get 8 double.load 1 local.tee
+  0 local.get 0 double.load 2 local.tee
+;
+
 : dd-d-done ( -- )
   8 double.store
   0 local.get 8 add stack!
@@ -552,6 +557,12 @@ next func; make-native 2/
 
 func: {c-}
   stack@ 0 local.tee
+  -1 i32.const 0 local.get 0 cell.load i32.xor
+  0 cell.store
+next func; make-native invert
+
+func: {c-}
+  stack@ 0 local.tee
   0 i32.const 0 local.get 0 cell.load i32.sub
   0 cell.store
 next func; make-native negate
@@ -597,6 +608,12 @@ func: {c-}
   i64.mul
   dc-d-done
 next func; make-native ud*
+
+func: {c-}
+  dd-d-start
+  i64.mul
+  dd-d-done
+next func; make-native dd*
 
 func: {c-}
   stack@ 0 local.tee
@@ -705,21 +722,33 @@ func: {c-} locals dd
   0 double.store
 next func; make-native ud/mod
 
-func: {c-} locals c
-  (pop) call 0 local.tee
-  (pop) call 1 local.tee
-  0 local.get 1 local.get
+func: {c-} locals cc
+  stack@ 0 local.tee cc-load-locals
+  1 local.get 2 local.get
   i32.lt_s select
-  (push) call
+  cc-c-done
 next func; make-native min
 
-func: {c-} locals c
-  (pop) call 0 local.tee
-  (pop) call 1 local.tee
-  0 local.get 1 local.get
+func: {c-} locals dd
+  stack@ 0 local.tee dd-load-locals
+  1 local.get 2 local.get
+  i64.lt_s select
+  dd-d-done
+next func; make-native dmin
+
+func: {c-} locals cc
+  stack@ 0 local.tee cc-load-locals
+  1 local.get 2 local.get
   i32.gt_s select
-  (push) call
+  cc-c-done
 next func; make-native max
+
+func: {c-} locals dd
+  stack@ 0 local.tee dd-load-locals
+  1 local.get 2 local.get
+  i64.gt_s select
+  dd-d-done
+next func; make-native dmax
 
 func: {c-}
   cc-c-start

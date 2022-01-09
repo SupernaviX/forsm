@@ -175,7 +175,7 @@ decimal
 : ( [char] ) parse 2drop ; immediate
 
 \ defining words
-: create parse-name header ;
+: create align parse-name header ;
 : variable ( -- ) create 0 , ;
 : constant ( val -- ) create (docon) xt, , ;
 : : create (docol) xt, hide ] ;

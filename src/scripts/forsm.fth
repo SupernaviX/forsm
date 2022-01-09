@@ -31,7 +31,7 @@ wasi-import: fd_fdstat_get {cc-c} constant (fd-fdstat-get)
 variable funcref#
 0 funcref# !
 
-1 10 +memory
+1 200 +memory
 0 elemsec: 0 i32.const elemsec; elemsec!
 
 : make-callable ( func -- index )
